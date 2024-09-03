@@ -503,6 +503,49 @@
     }
   }
 
+  // part.ts
+  var ellipticalPath = class {
+    center;
+    radius;
+    startAngle;
+    endAngle;
+    draw(ctx2) {
+      ctx2.beginPath();
+      ctx2.ellipse(this.center.x, this.center.y, this.radius, this.radius, 0, this.startAngle, this.endAngle);
+      ctx2.stroke();
+    }
+  };
+  var freePath = class {
+    segments = [];
+    draw(ctx2) {
+      ctx2.beginPath();
+      for (let s = 1; s < this.segments.length; s++) {
+        ctx2.moveTo(this.segments[s - 1].x, this.segments[s - 1].y);
+        ctx2.lineTo(this.segments[s].x, this.segments[s].y);
+      }
+      ctx2.stroke();
+    }
+  };
+  var linePath = class {
+    start;
+    end;
+    draw(ctx2) {
+      ctx2.beginPath();
+      ctx2.moveTo(this.start.x, this.start.y);
+      ctx2.lineTo(this.end.x, this.end.y);
+      ctx2.stroke();
+    }
+  };
+  var Part = class {
+    paths = [];
+    draw(ctx2) {
+      ctx2.lineWidth = 3;
+      for (let p of this.paths) {
+        p.draw(ctx2);
+      }
+    }
+  };
+
   // main.ts
   var controlSnapDistance = 10;
   var gridMinorInterval = 10;
@@ -531,11 +574,24 @@
   }
   var c = new canvas();
   var ctx = c.getContext("2d");
+  ctx.lineCap = "round";
   var pointerPos = new Vec2(0, 0);
   var mousePos = new Vec2(0, 0);
   var mouseDown = false;
   function near(a, b, distance) {
     return a == b || b - a < distance && a - b < distance;
+  }
+  function near2d(a, b, distance) {
+    return near(a.x, b.x, distance) && near(a.y, b.y, distance);
+  }
+  function closestPointOnLine(lineStart, lineEnd) {
+    const lineVector = new Vec2(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
+    const cursorVector = new Vec2(mousePos.x - lineStart.x, mousePos.y - lineStart.y);
+    const dotProduct = lineVector.x * cursorVector.x + lineVector.y * cursorVector.y;
+    const lineMagnitudeSquared = lineVector.x * lineVector.x + lineVector.y * lineVector.y;
+    const t = dotProduct / lineMagnitudeSquared;
+    const clampedT = Math.max(0, Math.min(1, t));
+    return new Vec2(lineStart.x + clampedT * lineVector.x, lineStart.y + clampedT * lineVector.y);
   }
   ctx.strokeStyle = "red";
   var defaultVec2 = new Vec2(0, 0);
@@ -573,8 +629,11 @@
   }
   var mouseDownPos = new Vec2(0, 0);
   c.addEventListener("mousedown", () => {
-    mouseDown = true;
     mouseDownPos = viewportToWorld2(mousePos);
+    if (selectedTool && selectedMode == "draw") {
+      toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints);
+    }
+    mouseDown = true;
   });
   document.addEventListener("mouseup", () => {
     mouseDown = false;
@@ -587,7 +646,7 @@
       Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval,
       Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
     );
-    if (near(pointerPos.x, nearestSnapPoint.x, 2) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
+    if (near(pointerPos.x, nearestSnapPoint.x, 3) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
       return nearestSnapPoint;
     }
     return pointerPos;
@@ -613,6 +672,7 @@
       var tG = toolGuides[selectedTool];
       tG.draw(ctx, tG.controlPoints);
     }
+    currentPart.draw(ctx);
     lastMousePos.x = mousePos.x;
     lastMousePos.y = mousePos.y;
     requestAnimationFrame(render);
@@ -622,12 +682,16 @@
     var ev = e;
     pointerPos.x = ev.clientX;
     pointerPos.y = ev.clientY;
-    if (mouseDown && selectedMode == "move") {
-      posInWorld.x = mouseDownPos.x - mousePos.x;
-      posInWorld.y = mouseDownPos.y - mousePos.y;
-      console.log(mouseDownPos, mousePos, posInWorld);
-      yOffset.setValue(String(posInWorld.y)).applyLastChange();
-      xOffset.setValue(String(posInWorld.x)).applyLastChange();
+    if (mouseDown) {
+      if (selectedMode == "move") {
+        posInWorld.x = mouseDownPos.x - mousePos.x;
+        posInWorld.y = mouseDownPos.y - mousePos.y;
+        console.log(mouseDownPos, mousePos, posInWorld);
+        yOffset.setValue(String(posInWorld.y)).applyLastChange();
+        xOffset.setValue(String(posInWorld.x)).applyLastChange();
+      } else if (selectedMode == "draw") {
+        toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints);
+      }
     }
   });
   var resizeObserver = new ResizeObserver(() => {
@@ -689,13 +753,31 @@
   registerKeybind("g", () => {
     selectTool("free");
   });
+  var currentPart = new Part();
   var selectedTool;
+  var freehandSegmentLength = 3;
+  var currentPath;
   var toolGuides = {
     free: {
       controlPoints: [],
       draw: (c2, d) => {
       },
       centerControlPoints: () => {
+      },
+      handleStartDraw: () => {
+        var p = new freePath();
+        p.segments = [new Vec2(mouseDownPos.x, mouseDownPos.y)];
+        currentPart.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: () => {
+        var lastSegment = currentPath.segments[currentPath.segments.length - 1];
+        console.log(lastSegment);
+        if (near2d(mousePos, lastSegment, freehandSegmentLength)) {
+        } else {
+          currentPath.segments.push(new Vec2(mousePos.x, mousePos.y));
+        }
       }
     },
     line: {
@@ -710,6 +792,18 @@
         ctx2.lineTo(vCoords1.x, vCoords1.y);
         ctx2.stroke();
         drawControlPoints(ctx2, controlPoints);
+      },
+      handleStartDraw: (controlPoints) => {
+        var p = new linePath();
+        p.start = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
+        p.end = new Vec2(p.start.x, p.start.y);
+        currentPart.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: (controlPoints) => {
+        ;
+        currentPath.end = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
       }
     },
     circle: {
@@ -731,6 +825,21 @@
         );
         ctx2.stroke();
         drawControlPoints(ctx2, controlPoints);
+      },
+      handleStartDraw: (controlPoints) => {
+        var p = new ellipticalPath();
+        console.log(controlPoints);
+        p.radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
+        p.center = controlPoints[0][0];
+        p.startAngle = Math.atan((mousePos.x - controlPoints[0][0].x) / (mousePos.y + controlPoints[0][0].y)) * (180 / Math.PI);
+        p.endAngle = p.startAngle;
+        currentPart.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: (controlPoints) => {
+        var p = currentPath;
+        p.endAngle = Math.atan((mousePos.x - controlPoints[0][0].x) / (mousePos.y - controlPoints[0][0].y)) * (180 / Math.PI);
       }
     }
   };

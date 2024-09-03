@@ -2,6 +2,7 @@ import { button, canvas, container, textInput } from "kleinui/elements"
 import { kleinTextNode, renderApp, styleGroup } from "kleinui"
 import { keys, registerKeybind } from "./keys"
 import { drawGrid } from "./grid"
+import { ellipticalPath, freePath, linePath, Part, Path } from "./part"
 
 
 
@@ -41,14 +42,66 @@ export function worldToViewport(pos: Vec2) {
 const c = new canvas()
 const ctx = c.getContext("2d")!
 
+ctx.lineCap = "round"
 
 var pointerPos = new Vec2(0,0) // specifically position of pointer ignoring snapping
-var mousePos = new Vec2(0,0) // mouse position including snapping
+export var mousePos = new Vec2(0,0) // mouse position including snapping
 var mouseDown = false
 
 
 function near(a: number, b: number, distance: number) {
     return (a == b || (b-a < distance && a-b < distance))
+}
+
+function near2d(a: Vec2, b: Vec2, distance: number) {
+    // update to pythaggoras
+    return near(a.x, b.x, distance) && near(a.y, b.y, distance)
+}
+
+function distance(a: Vec2, b: Vec2) {
+    return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2))
+}
+
+function angle(v1: Vec2, v2: Vec2): number {
+    // Calculate the dot product of the two vectors
+    const dotProduct = v1.x * v2.x + v1.y * v2.y;
+
+    // Calculate the magnitudes of the two vectors
+    const magnitudeV1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+    const magnitudeV2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+
+    // Calculate the cosine of the angle between the vectors
+    const cosTheta = dotProduct / (magnitudeV1 * magnitudeV2);
+
+    // Calculate the angle in radians
+    const angleRadians = Math.acos(cosTheta);
+
+    // Convert the angle to degrees (optional)
+    const angleDegrees = angleRadians * 180 / Math.PI;
+
+    return angleDegrees; // Or return angleRadians if you prefer
+}
+
+function closestPointOnLine(lineStart: Vec2, lineEnd: Vec2) {
+    // Calculate the vector from lineStart to lineEnd
+    const lineVector = new Vec2(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y)
+
+    // Calculate the vector from lineStart to the cursor
+    const cursorVector = new Vec2(mousePos.x - lineStart.x, mousePos.y - lineStart.y)
+
+    // Calculate the dot product of the two vectors
+    const dotProduct = lineVector.x * cursorVector.x + lineVector.y * cursorVector.y;
+
+    // Calculate the magnitude squared of the line vector
+    const lineMagnitudeSquared = lineVector.x * lineVector.x + lineVector.y * lineVector.y;
+
+    // Calculate the parameter t
+    const t = dotProduct / lineMagnitudeSquared;
+
+    // Clamp t to the range [0, 1] to ensure the closest point is on the line segment
+    const clampedT = Math.max(0, Math.min(1, t));
+
+    return new Vec2(lineStart.x + clampedT * lineVector.x, lineStart.y + clampedT * lineVector.y)
 }
 
 ctx.strokeStyle = "red"
@@ -95,8 +148,11 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
 
 var mouseDownPos = new Vec2(0,0)
 c.addEventListener("mousedown", ()=>{
-    mouseDown = true
     mouseDownPos = viewportToWorld(mousePos)
+    if (selectedTool && selectedMode == "draw") {
+        toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints)
+    }
+    mouseDown = true
 })
 document.addEventListener("mouseup", ()=>{
     mouseDown = false
@@ -117,7 +173,7 @@ function checkSnapPoints(): Vec2 {
         Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
     )
     
-    if (near(pointerPos.x, nearestSnapPoint.x, 2) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
+    if (near(pointerPos.x, nearestSnapPoint.x, 3) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
         return nearestSnapPoint
     }
     return pointerPos
@@ -151,6 +207,7 @@ function render() {
         var tG = toolGuides[selectedTool]
         tG.draw(ctx, tG.controlPoints)
     }
+    currentPart.draw(ctx)
     lastMousePos.x = mousePos.x
     lastMousePos.y = mousePos.y
     requestAnimationFrame(render)
@@ -164,13 +221,17 @@ c.addEventListener("mousemove", (self, e) => {
     var  ev = e as MouseEvent
     pointerPos.x = ev.clientX
     pointerPos.y = ev.clientY
-    if (mouseDown && selectedMode == "move") {
-        posInWorld.x = mouseDownPos.x - mousePos.x
-        posInWorld.y = mouseDownPos.y - mousePos.y
-        console.log(mouseDownPos, mousePos, posInWorld)
-        yOffset.setValue(String(posInWorld.y)).applyLastChange()
-        xOffset.setValue(String(posInWorld.x)).applyLastChange()
-
+    if (mouseDown) {
+        if (selectedMode == "move") {
+            posInWorld.x = mouseDownPos.x - mousePos.x
+            posInWorld.y = mouseDownPos.y - mousePos.y
+            console.log(mouseDownPos, mousePos, posInWorld)
+            yOffset.setValue(String(posInWorld.y)).applyLastChange()
+            xOffset.setValue(String(posInWorld.x)).applyLastChange()
+        
+        } else if (selectedMode == "draw") {
+            toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints)
+        }
     }
 })
 
@@ -250,18 +311,41 @@ registerKeybind("g", ()=>{
 type toolGuide = {
     controlPoints: Vec2[][],
     draw: (ctx: CanvasRenderingContext2D, controlPoints: Vec2[][])=>void
-    centerControlPoints: (self: toolGuide)=>void
-
+    centerControlPoints: (self: toolGuide)=>void,
+    handleDraw: (controlPoints: Vec2[][])=>void,
+    handleStartDraw: (controlPoints: Vec2[][])=>void
 }
+
+var currentPart = new Part()
+
 
 
 var selectedTool: string 
+
+const freehandSegmentLength = 3
+var currentPath: Path;
 
 const toolGuides = {
     free: {
         controlPoints: [],
         draw: (c,d)=>{},
-        centerControlPoints: ()=>{}
+        centerControlPoints: ()=>{},
+        handleStartDraw: ()=>{
+            var p = new freePath()
+            p.segments = [new Vec2(mouseDownPos.x, mouseDownPos.y)]
+            currentPart.paths.push(p)
+            currentPath = p
+            console.log(currentPath)
+        },
+        handleDraw: ()=>{
+            var lastSegment = (currentPath as freePath).segments[(currentPath as freePath).segments.length-1]
+            console.log(lastSegment)
+            if (near2d(mousePos, lastSegment, freehandSegmentLength)) {
+                // wait and dont update last segment 
+            } else {
+                (currentPath as freePath).segments.push(new Vec2(mousePos.x, mousePos.y))
+            }
+        }
     } as toolGuide,
     line: {
         centerControlPoints: (self)=>{
@@ -276,7 +360,20 @@ const toolGuides = {
             ctx.lineTo(vCoords1.x, vCoords1.y)
             ctx.stroke()
             drawControlPoints(ctx, controlPoints)
+        },
+        handleStartDraw: (controlPoints)=>{
+            var p = new linePath()
+            p.start = closestPointOnLine(controlPoints[0][0], controlPoints[1][0])
+            p.end = new Vec2(p.start.x ,p.start.y)
+            currentPart.paths.push(p)
+            currentPath = p
+            console.log(currentPath)
+        },
+        handleDraw: (controlPoints)=>{
+            ;(currentPath as linePath).end = closestPointOnLine(controlPoints[0][0], controlPoints[1][0])
+            
         }
+        
     } as toolGuide,
     circle: {
         centerControlPoints: (self)=>{
@@ -297,6 +394,21 @@ const toolGuides = {
             )
             ctx.stroke()
             drawControlPoints(ctx, controlPoints)
+        },
+        handleStartDraw: (controlPoints)=>{
+            var p = new ellipticalPath()
+            console.log(controlPoints)
+            p.radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2))
+            p.center = controlPoints[0][0]
+            p.startAngle = Math.atan((mousePos.x-controlPoints[0][0].x)/(mousePos.y+controlPoints[0][0].y)) * (180/Math.PI)
+            p.endAngle = p.startAngle
+            currentPart.paths.push(p)
+            currentPath = p
+            console.log(currentPath)
+        },
+        handleDraw: (controlPoints)=>{
+            var p = currentPath as ellipticalPath
+            p.endAngle = Math.atan((mousePos.x-controlPoints[0][0].x)/(mousePos.y-controlPoints[0][0].y)) * (180/Math.PI)
         }
     } as toolGuide,
 }
