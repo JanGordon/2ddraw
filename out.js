@@ -378,21 +378,6 @@
     node.addStyle("width: 100%; height: 100%; overflow: hidden;");
     node.width = document.body.clientWidth;
     node.height = document.body.clientHeight;
-    const onResize = () => {
-      resizeElement.style.display = "none";
-      node.width = document.body.clientWidth;
-      node.height = document.body.clientHeight;
-      node.updateDimensions();
-      if (resizeListener) {
-        resizeListener();
-      }
-    };
-    var doit;
-    addEventListener("resize", () => {
-      resizeElement.style.display = "flex";
-      clearTimeout(doit);
-      doit = setTimeout(onResize, 100);
-    });
     node.updateDimensions();
     target.style.overflow = "hidden";
     node.render(target);
@@ -628,14 +613,14 @@
     }
   }
   var mouseDownPos = new Vec2(0, 0);
-  c.addEventListener("mousedown", () => {
+  c.addEventListener("pointerdown", () => {
     mouseDownPos = viewportToWorld2(mousePos);
     if (selectedTool && selectedMode == "draw") {
       toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints);
     }
     mouseDown = true;
   });
-  document.addEventListener("mouseup", () => {
+  document.addEventListener("pointerup", () => {
     mouseDown = false;
     draggingItems = [];
   });
@@ -682,6 +667,22 @@
     var ev = e;
     pointerPos.x = ev.clientX;
     pointerPos.y = ev.clientY;
+    if (mouseDown) {
+      if (selectedMode == "move") {
+        posInWorld.x = mouseDownPos.x - mousePos.x;
+        posInWorld.y = mouseDownPos.y - mousePos.y;
+        console.log(mouseDownPos, mousePos, posInWorld);
+        yOffset.setValue(String(posInWorld.y)).applyLastChange();
+        xOffset.setValue(String(posInWorld.x)).applyLastChange();
+      } else if (selectedMode == "draw") {
+        toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints);
+      }
+    }
+  });
+  c.addEventListener("touchmove", (self, e) => {
+    var ev = e;
+    pointerPos.x = ev.touches[0].clientX;
+    pointerPos.y = ev.touches[0].clientY;
     if (mouseDown) {
       if (selectedMode == "move") {
         posInWorld.x = mouseDownPos.x - mousePos.x;

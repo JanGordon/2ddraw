@@ -147,14 +147,14 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
 }
 
 var mouseDownPos = new Vec2(0,0)
-c.addEventListener("mousedown", ()=>{
+c.addEventListener("pointerdown", ()=>{
     mouseDownPos = viewportToWorld(mousePos)
     if (selectedTool && selectedMode == "draw") {
         toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints)
     }
     mouseDown = true
 })
-document.addEventListener("mouseup", ()=>{
+document.addEventListener("pointerup", ()=>{
     mouseDown = false
     draggingItems = []
 })
@@ -221,6 +221,24 @@ c.addEventListener("mousemove", (self, e) => {
     var  ev = e as MouseEvent
     pointerPos.x = ev.clientX
     pointerPos.y = ev.clientY
+    if (mouseDown) {
+        if (selectedMode == "move") {
+            posInWorld.x = mouseDownPos.x - mousePos.x
+            posInWorld.y = mouseDownPos.y - mousePos.y
+            console.log(mouseDownPos, mousePos, posInWorld)
+            yOffset.setValue(String(posInWorld.y)).applyLastChange()
+            xOffset.setValue(String(posInWorld.x)).applyLastChange()
+        
+        } else if (selectedMode == "draw") {
+            toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints)
+        }
+    }
+})
+
+c.addEventListener("touchmove", (self, e) => {
+    var  ev = e as TouchEvent
+    pointerPos.x = ev.touches[0].clientX
+    pointerPos.y = ev.touches[0].clientY
     if (mouseDown) {
         if (selectedMode == "move") {
             posInWorld.x = mouseDownPos.x - mousePos.x
