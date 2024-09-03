@@ -7,6 +7,9 @@ import { drawGrid } from "./grid"
 
 const controlSnapDistance = 10
 
+var gridMinorInterval = 10
+var gridMajorInterval = 100
+
 export class Vec2 {
     x: number
     y: number
@@ -16,7 +19,7 @@ export class Vec2 {
     }
 }
 
-var posInWorld = new Vec2(100,0)
+var posInWorld = new Vec2(0,0)
 var zoomFactor = 1
 
 export function viewportToWorld(pos: Vec2) {
@@ -39,7 +42,8 @@ const c = new canvas()
 const ctx = c.getContext("2d")!
 
 
-var mousePos = new Vec2(0,0)
+var pointerPos = new Vec2(0,0) // specifically position of pointer ignoring snapping
+var mousePos = new Vec2(0,0) // mouse position including snapping
 var mouseDown = false
 
 
@@ -103,11 +107,30 @@ document.addEventListener("mouseup", ()=>{
 
 var lastMousePos = new Vec2(0,0)
 
+var engageSnapping = false
+
+
+function checkSnapPoints(): Vec2 {
+    var worldPointerPos = viewportToWorld(pointerPos)
+    var nearestSnapPoint = new Vec2(
+        Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval,
+        Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
+    )
+    
+    if (near(pointerPos.x, nearestSnapPoint.x, 2) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
+        return nearestSnapPoint
+    }
+    return pointerPos
+}
 
 function render() {
+
+    var newMousePos = checkSnapPoints()
+    mousePos.x = newMousePos.x
+    mousePos.y = newMousePos.y
     ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
 
-    drawGrid(ctx, posInWorld, 10, 100)
+    drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval)
     ctx.strokeStyle = "grey"
     
     
@@ -135,10 +158,12 @@ function render() {
 
 requestAnimationFrame(render)
 
+
+
 c.addEventListener("mousemove", (self, e) => {
     var  ev = e as MouseEvent
-    mousePos.x = ev.clientX
-    mousePos.y = ev.clientY
+    pointerPos.x = ev.clientX
+    pointerPos.y = ev.clientY
     if (mouseDown && selectedMode == "move") {
         posInWorld.x = mouseDownPos.x - mousePos.x
         posInWorld.y = mouseDownPos.y - mousePos.y
@@ -225,6 +250,8 @@ registerKeybind("g", ()=>{
 type toolGuide = {
     controlPoints: Vec2[][],
     draw: (ctx: CanvasRenderingContext2D, controlPoints: Vec2[][])=>void
+    centerControlPoints: (self: toolGuide)=>void
+
 }
 
 
@@ -233,10 +260,13 @@ var selectedTool: string
 const toolGuides = {
     free: {
         controlPoints: [],
-        draw: (c,d)=>{}
+        draw: (c,d)=>{},
+        centerControlPoints: ()=>{}
     } as toolGuide,
     line: {
-        controlPoints: [[viewportToWorld(new Vec2(40,140))], [viewportToWorld(new Vec2(500,140))]],
+        centerControlPoints: (self)=>{
+            self.controlPoints = [[viewportToWorld(new Vec2(c.htmlNode.width/2-50,c.htmlNode.height/2))], [viewportToWorld(new Vec2(c.htmlNode.width/2+50,c.htmlNode.height/2))]]
+        },
         draw: (ctx, controlPoints)=>{
             ctx.beginPath()
             var vCoords = worldToViewport(controlPoints[0][0])
@@ -249,9 +279,10 @@ const toolGuides = {
         }
     } as toolGuide,
     circle: {
-        controlPoints: [[viewportToWorld(new Vec2(240,140)), viewportToWorld(new Vec2(400,140))]],
+        centerControlPoints: (self)=>{
+            self.controlPoints = [[viewportToWorld(new Vec2(c.htmlNode.width/2,c.htmlNode.height/2)), viewportToWorld(new Vec2(c.htmlNode.width/2+100,c.htmlNode.height/2))]]
+        },
         draw: (ctx, controlPoints)=>{
-            var vRadiusCoords = worldToViewport(controlPoints[0][1])
 
             var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2))
             ctx.beginPath()
@@ -280,6 +311,7 @@ function selectTool(tool: string) {
     for (let i of Object.values(toolButtons)) {
         i.removeClass("selected").applyLastChange()
     }
+    toolGuides[tool].centerControlPoints(toolGuides[tool])
     toolButtons[tool].addClass("selected").applyLastChange()
     toolGuides[tool].draw(ctx, toolGuides[tool].controlPoints)
     selectedTool = tool

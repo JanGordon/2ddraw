@@ -505,6 +505,8 @@
 
   // main.ts
   var controlSnapDistance = 10;
+  var gridMinorInterval = 10;
+  var gridMajorInterval = 100;
   var Vec2 = class {
     x;
     y;
@@ -513,7 +515,7 @@
       this.y = y;
     }
   };
-  var posInWorld = new Vec2(100, 0);
+  var posInWorld = new Vec2(0, 0);
   var zoomFactor = 1;
   function viewportToWorld2(pos) {
     return new Vec2(
@@ -529,6 +531,7 @@
   }
   var c = new canvas();
   var ctx = c.getContext("2d");
+  var pointerPos = new Vec2(0, 0);
   var mousePos = new Vec2(0, 0);
   var mouseDown = false;
   function near(a, b, distance) {
@@ -578,9 +581,23 @@
     draggingItems = [];
   });
   var lastMousePos = new Vec2(0, 0);
+  function checkSnapPoints() {
+    var worldPointerPos = viewportToWorld2(pointerPos);
+    var nearestSnapPoint = new Vec2(
+      Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval,
+      Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
+    );
+    if (near(pointerPos.x, nearestSnapPoint.x, 2) && near(pointerPos.y, nearestSnapPoint.y, 2)) {
+      return nearestSnapPoint;
+    }
+    return pointerPos;
+  }
   function render() {
+    var newMousePos = checkSnapPoints();
+    mousePos.x = newMousePos.x;
+    mousePos.y = newMousePos.y;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    drawGrid(ctx, posInWorld, 10, 100);
+    drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval);
     ctx.strokeStyle = "grey";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -603,8 +620,8 @@
   requestAnimationFrame(render);
   c.addEventListener("mousemove", (self, e) => {
     var ev = e;
-    mousePos.x = ev.clientX;
-    mousePos.y = ev.clientY;
+    pointerPos.x = ev.clientX;
+    pointerPos.y = ev.clientY;
     if (mouseDown && selectedMode == "move") {
       posInWorld.x = mouseDownPos.x - mousePos.x;
       posInWorld.y = mouseDownPos.y - mousePos.y;
@@ -677,10 +694,14 @@
     free: {
       controlPoints: [],
       draw: (c2, d) => {
+      },
+      centerControlPoints: () => {
       }
     },
     line: {
-      controlPoints: [[viewportToWorld2(new Vec2(40, 140))], [viewportToWorld2(new Vec2(500, 140))]],
+      centerControlPoints: (self) => {
+        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2 - 50, c.htmlNode.height / 2))], [viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 50, c.htmlNode.height / 2))]];
+      },
       draw: (ctx2, controlPoints) => {
         ctx2.beginPath();
         var vCoords = worldToViewport(controlPoints[0][0]);
@@ -692,9 +713,10 @@
       }
     },
     circle: {
-      controlPoints: [[viewportToWorld2(new Vec2(240, 140)), viewportToWorld2(new Vec2(400, 140))]],
+      centerControlPoints: (self) => {
+        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
+      },
       draw: (ctx2, controlPoints) => {
-        var vRadiusCoords = worldToViewport(controlPoints[0][1]);
         var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
         ctx2.beginPath();
         var vCentreCoords = worldToViewport(controlPoints[0][0]);
@@ -721,6 +743,7 @@
     for (let i of Object.values(toolButtons)) {
       i.removeClass("selected").applyLastChange();
     }
+    toolGuides[tool].centerControlPoints(toolGuides[tool]);
     toolButtons[tool].addClass("selected").applyLastChange();
     toolGuides[tool].draw(ctx, toolGuides[tool].controlPoints);
     selectedTool = tool;
