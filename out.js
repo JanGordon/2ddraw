@@ -446,23 +446,56 @@
     }
   };
 
+  // keys.ts
+  var keys = /* @__PURE__ */ new Map([]);
+  var keybinds = /* @__PURE__ */ new Map([]);
+  document.addEventListener("keydown", (e) => {
+    keys.set(e.key, true);
+    if (keybinds.get(e.key)) {
+      for (let i of keybinds.get(e.key)) {
+        i();
+      }
+    }
+  });
+  document.addEventListener("keyup", (e) => {
+    keys.set(e.key, false);
+  });
+  function registerKeybind(key, callback) {
+    if (keybinds.get(key)) {
+      keybinds.get(key).push(callback);
+    } else {
+      keybinds.set(key, [callback]);
+    }
+  }
+
   // grid.ts
-  var worldWidth = 1e3;
-  var worldHeight = 1e3;
-  function drawGrid(ctx2, interval) {
-    ctx2.lineWidth = 0.4;
+  function drawGrid(ctx2, posInWorld2, interval, bigInterval) {
     ctx2.strokeStyle = "lightgrey";
-    for (let y = 0; y <= worldHeight; y += interval) {
-      var vStart = worldToViewport(new Vec2(0, y));
-      var vEnd = worldToViewport(new Vec2(worldWidth, y));
+    var deadSpaceAtStartY = posInWorld2.y % interval;
+    var startOfGridY = posInWorld2.y - deadSpaceAtStartY;
+    for (let y = startOfGridY; y <= startOfGridY + ctx2.canvas.height + deadSpaceAtStartY; y += interval) {
+      var vStart = worldToViewport(new Vec2(posInWorld2.x, y));
+      var vEnd = worldToViewport(new Vec2(posInWorld2.x + ctx2.canvas.width, y));
+      if (y % bigInterval == 0) {
+        ctx2.lineWidth = 2;
+      } else {
+        ctx2.lineWidth = 0.4;
+      }
       ctx2.beginPath();
       ctx2.moveTo(vStart.x, vStart.y);
       ctx2.lineTo(vEnd.x, vEnd.y);
       ctx2.stroke();
     }
-    for (let x = 0; x <= worldWidth; x += interval) {
-      var vStart = worldToViewport(new Vec2(x, 0));
-      var vEnd = worldToViewport(new Vec2(x, worldWidth));
+    var deadSpaceAtStartX = posInWorld2.x % interval;
+    var startOfGridX = posInWorld2.x - deadSpaceAtStartX;
+    for (let x = startOfGridX; x <= startOfGridX + ctx2.canvas.width + deadSpaceAtStartX; x += interval) {
+      var vStart = worldToViewport(new Vec2(x, posInWorld2.y));
+      var vEnd = worldToViewport(new Vec2(x, posInWorld2.y + ctx2.canvas.height));
+      if (x % bigInterval == 0) {
+        ctx2.lineWidth = 2;
+      } else {
+        ctx2.lineWidth = 0.4;
+      }
       ctx2.beginPath();
       ctx2.moveTo(vStart.x, vStart.y);
       ctx2.lineTo(vEnd.x, vEnd.y);
@@ -482,7 +515,7 @@
   };
   var posInWorld = new Vec2(100, 0);
   var zoomFactor = 1;
-  function viewportToWorld(pos) {
+  function viewportToWorld2(pos) {
     return new Vec2(
       pos.x * zoomFactor + posInWorld.x,
       pos.y * zoomFactor + posInWorld.y
@@ -519,14 +552,14 @@
             if (i == c2[0] && c2.length > 1) {
               var yOffsetToOtherControlPoint = i.y - c2[1].y;
               var xOffsetToOtherControlPoint = i.x - c2[1].x;
-              var newI = viewportToWorld(mousePos);
+              var newI = viewportToWorld2(mousePos);
               i.x = newI.x;
               i.y = newI.y;
-              var newNeighbour = viewportToWorld(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint));
+              var newNeighbour = viewportToWorld2(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint));
               c2[1].x = newNeighbour.x;
               c2[1].y = newNeighbour.y;
             } else {
-              var newI = viewportToWorld(mousePos);
+              var newI = viewportToWorld2(mousePos);
               i.x = newI.x;
               i.y = newI.y;
             }
@@ -538,30 +571,22 @@
   var mouseDownPos = new Vec2(0, 0);
   c.addEventListener("mousedown", () => {
     mouseDown = true;
-    mouseDownPos = viewportToWorld(mousePos);
+    mouseDownPos = viewportToWorld2(mousePos);
   });
   document.addEventListener("mouseup", () => {
     mouseDown = false;
     draggingItems = [];
   });
-  document.addEventListener("keydown", (e) => {
-    if (e.key == "d") {
-      selectMode("draw");
-    }
-    if (e.key == "s") {
-      selectMode("select");
-    }
-  });
   var lastMousePos = new Vec2(0, 0);
   function render() {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    drawGrid(ctx, 10);
+    drawGrid(ctx, posInWorld, 10, 100);
     ctx.strokeStyle = "grey";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(mousePos.x, mousePos.y, 2, 2, 0, 0, 360);
     ctx.stroke();
-    var worldMousePos = viewportToWorld(mousePos);
+    var worldMousePos = viewportToWorld2(mousePos);
     xCoordReadout.content = `${worldMousePos.x}`;
     xCoordReadout.rerender();
     yCoordReadout.content = `${worldMousePos.y}`;
@@ -599,16 +624,27 @@
         border: 1px solid rgb(153,153,153);
         border-radius: 4px; 
         padding: 0.3em 0.4em;
+        width: 100%;
+        font-weight: bolder;
     `],
     [".btn.selected", `
         background-color: rgb(220,220,220);    
     `]
   ], "btn");
   var modeButtons = {
-    select: new button("select").addClass("selected"),
-    draw: new button("draw"),
-    move: new button("move")
+    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
+    draw: new button("draw").setAttribute("title", "draw (d)"),
+    move: new button("move").setAttribute("title", "move (f)")
   };
+  registerKeybind("s", () => {
+    selectMode("select");
+  });
+  registerKeybind("d", () => {
+    selectMode("draw");
+  });
+  registerKeybind("f", () => {
+    selectMode("move");
+  });
   var selectedMode = "select";
   for (let i of Object.entries(modeButtons)) {
     i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
@@ -623,13 +659,28 @@
     selectedMode = mode;
   }
   var toolButtons = {
-    line: new button("line"),
-    circle: new button("circle")
+    free: new button("free").setAttribute("title", "free (g)"),
+    line: new button("line").setAttribute("title", "line (v)"),
+    circle: new button("circle").setAttribute("title", "circle (c)")
   };
+  registerKeybind("v", () => {
+    selectTool("line");
+  });
+  registerKeybind("c", () => {
+    selectTool("circle");
+  });
+  registerKeybind("g", () => {
+    selectTool("free");
+  });
   var selectedTool;
   var toolGuides = {
+    free: {
+      controlPoints: [],
+      draw: (c2, d) => {
+      }
+    },
     line: {
-      controlPoints: [[viewportToWorld(new Vec2(40, 140))], [viewportToWorld(new Vec2(500, 140))]],
+      controlPoints: [[viewportToWorld2(new Vec2(40, 140))], [viewportToWorld2(new Vec2(500, 140))]],
       draw: (ctx2, controlPoints) => {
         ctx2.beginPath();
         var vCoords = worldToViewport(controlPoints[0][0]);
@@ -641,7 +692,7 @@
       }
     },
     circle: {
-      controlPoints: [[viewportToWorld(new Vec2(240, 140)), viewportToWorld(new Vec2(400, 140))]],
+      controlPoints: [[viewportToWorld2(new Vec2(240, 140)), viewportToWorld2(new Vec2(400, 140))]],
       draw: (ctx2, controlPoints) => {
         var vRadiusCoords = worldToViewport(controlPoints[0][1]);
         var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
@@ -682,20 +733,26 @@
   var yOffset = new textInput().setValue(String(posInWorld.y)).addEventListener("change", () => {
     posInWorld.y = parseFloat(yOffset.htmlNode.value);
   });
+  var hrStyles = new styleGroup([
+    [".hr", `
+        width: 70%;
+        height: 1px;
+        background-color: rgb(153,153,153);
+        margin: 0.2em 0;    
+    `]
+  ], "hr");
   var app = new container(
     new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
     new container(
-      new container(
-        new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
-          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        }),
-        ...Object.values(toolButtons)
-      ).addStyle("display: flex; gap: 0.2em;"),
-      new container(
-        ...Object.values(modeButtons)
-      ).addStyle("display: flex; gap: 0.2em;")
-    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;"),
+      new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      }),
+      new container().addToStyleGroup(hrStyles),
+      ...Object.values(toolButtons),
+      new container().addToStyleGroup(hrStyles),
+      ...Object.values(modeButtons)
+    ).addStyle("display: flex; padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"),
     new container(
       xOffset,
       yOffset

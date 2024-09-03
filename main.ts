@@ -1,6 +1,6 @@
 import { button, canvas, container, textInput } from "kleinui/elements"
 import { kleinTextNode, renderApp, styleGroup } from "kleinui"
-import { keys } from "./keys"
+import { keys, registerKeybind } from "./keys"
 import { drawGrid } from "./grid"
 
 
@@ -99,14 +99,7 @@ document.addEventListener("mouseup", ()=>{
     draggingItems = []
 })
 
-document.addEventListener("keydown", (e)=>{
-    if (e.key == "d") {
-        selectMode("draw")
-    }
-    if (e.key == "s") {
-        selectMode("select")
-    }
-})
+
 
 var lastMousePos = new Vec2(0,0)
 
@@ -114,7 +107,7 @@ var lastMousePos = new Vec2(0,0)
 function render() {
     ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
 
-    drawGrid(ctx, 10)
+    drawGrid(ctx, posInWorld, 10, 100)
     ctx.strokeStyle = "grey"
     
     
@@ -168,6 +161,8 @@ const buttonStyles = new styleGroup([
         border: 1px solid rgb(153,153,153);
         border-radius: 4px; 
         padding: 0.3em 0.4em;
+        width: 100%;
+        font-weight: bolder;
     `],
     [".btn.selected", `
         background-color: rgb(220,220,220);    
@@ -176,10 +171,20 @@ const buttonStyles = new styleGroup([
 
 
 const modeButtons = {
-    select: new button("select").addClass("selected"),
-    draw: new button("draw"),
-    move: new button("move")
+    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
+    draw: new button("draw").setAttribute("title", "draw (d)"),
+    move: new button("move").setAttribute("title", "move (f)")
 }
+
+registerKeybind("s", ()=>{
+    selectMode("select")
+})
+registerKeybind("d", ()=>{
+    selectMode("draw")
+})
+registerKeybind("f", ()=>{
+    selectMode("move")
+})
 
 var selectedMode = "select"
 
@@ -199,9 +204,20 @@ function selectMode(mode: string) {
 }
 
 const toolButtons = {
-    line: new button("line"),
-    circle: new button("circle")
+    free: new button("free").setAttribute("title", "free (g)"),
+    line: new button("line").setAttribute("title", "line (v)"),
+    circle: new button("circle").setAttribute("title", "circle (c)")
 }
+
+registerKeybind("v", ()=>{
+    selectTool("line")
+})
+registerKeybind("c", ()=>{
+    selectTool("circle")
+})
+registerKeybind("g", ()=>{
+    selectTool("free")
+})
 
 
 
@@ -215,6 +231,10 @@ type toolGuide = {
 var selectedTool: string 
 
 const toolGuides = {
+    free: {
+        controlPoints: [],
+        draw: (c,d)=>{}
+    } as toolGuide,
     line: {
         controlPoints: [[viewportToWorld(new Vec2(40,140))], [viewportToWorld(new Vec2(500,140))]],
         draw: (ctx, controlPoints)=>{
@@ -247,7 +267,7 @@ const toolGuides = {
             ctx.stroke()
             drawControlPoints(ctx, controlPoints)
         }
-    } as toolGuide
+    } as toolGuide,
 }
 
 for (let i of Object.entries(toolButtons)) {
@@ -276,22 +296,30 @@ var yOffset = new textInput().setValue(String(posInWorld.y)).addEventListener("c
     posInWorld.y = parseFloat(yOffset.htmlNode.value)
 })
 
+
+const hrStyles = new styleGroup([
+    [".hr", `
+        width: 70%;
+        height: 1px;
+        background-color: rgb(153,153,153);
+        margin: 0.2em 0;    
+    `]
+], "hr")
+
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
 
     new container(
-        new container(
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
                 ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
                 // ctx.stroke()
             }), 
-            ...Object.values(toolButtons)
-        ).addStyle("display: flex; gap: 0.2em;"),
-        new container(
+            new container().addToStyleGroup(hrStyles),
+            ...Object.values(toolButtons),
+            new container().addToStyleGroup(hrStyles),
             ...Object.values(modeButtons)
-        ).addStyle("display: flex; gap: 0.2em;")
-    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;"),
+    ).addStyle("display: flex; padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"),
     new container(
         xOffset,
         yOffset
