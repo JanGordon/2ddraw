@@ -1,11 +1,13 @@
-import { button, canvas, container } from "kleinui/elements"
+import { button, canvas, container, textInput } from "kleinui/elements"
 import { kleinTextNode, renderApp, styleGroup } from "kleinui"
 import { keys } from "./keys"
 import { drawGrid } from "./grid"
 
+
+
 const controlSnapDistance = 10
 
-class Vec2 {
+export class Vec2 {
     x: number
     y: number
     constructor(x: number, y: number) {
@@ -14,13 +16,30 @@ class Vec2 {
     }
 }
 
+var posInWorld = new Vec2(100,0)
+var zoomFactor = 1
+
+export function viewportToWorld(pos: Vec2) {
+    return new Vec2(
+        pos.x * zoomFactor + posInWorld.x,
+        pos.y * zoomFactor + posInWorld.y
+    )
+}
+
+export function worldToViewport(pos: Vec2) {
+    return new Vec2(
+        (pos.x - posInWorld.x) / zoomFactor,
+        (pos.y - posInWorld.y) / zoomFactor
+    )
+}
+
+
 
 const c = new canvas()
 const ctx = c.getContext("2d")!
 
 
-var mouseX = 0
-var mouseY = 0
+var mousePos = new Vec2(0,0)
 var mouseDown = false
 
 
@@ -38,10 +57,11 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
     for (let c of controlPoints) {
         for (let i of c) {
             ctx.beginPath()
-            ctx.ellipse(i.x, i.y, 3,3,0,0,360)
+            var vCoords = worldToViewport(i)
+            ctx.ellipse(vCoords.x, vCoords.y, 3,3,0,0,360)
             ctx.stroke()
             if (mouseDown && selectedMode == "select") {
-                if (near(mouseX, i.x, controlSnapDistance ) && near(mouseY, i.y, controlSnapDistance )) {
+                if (near(mousePos.x, vCoords.x, controlSnapDistance ) && near(mousePos.y, vCoords.y, controlSnapDistance )) {
                     
                     draggingItems.push(i)
                     
@@ -51,13 +71,16 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
                     if (i == c[0] && c.length > 1) {
                         var yOffsetToOtherControlPoint = i.y - c[1].y
                         var xOffsetToOtherControlPoint = i.x - c[1].x
-                        i.x = mouseX
-                        i.y = mouseY
-                        c[1].x = mouseX - xOffsetToOtherControlPoint
-                        c[1].y = mouseY - yOffsetToOtherControlPoint
+                        var newI = viewportToWorld(mousePos)
+                        i.x = newI.x
+                        i.y = newI.y
+                        var newNeighbour = viewportToWorld(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint))
+                        c[1].x = newNeighbour.x
+                        c[1].y = newNeighbour.y
                     } else {
-                        i.x = mouseX
-                        i.y = mouseY
+                        var newI = viewportToWorld(mousePos)
+                        i.x = newI.x
+                        i.y = newI.y
                     }
                 }
             }
@@ -65,8 +88,11 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
         
     }
 }
+
+var mouseDownPos = new Vec2(0,0)
 c.addEventListener("mousedown", ()=>{
     mouseDown = true
+    mouseDownPos = viewportToWorld(mousePos)
 })
 document.addEventListener("mouseup", ()=>{
     mouseDown = false
@@ -82,22 +108,26 @@ document.addEventListener("keydown", (e)=>{
     }
 })
 
-var lastMouseX = 0
-var lastMouseY = 0
+var lastMousePos = new Vec2(0,0)
+
 
 function render() {
     ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
 
     drawGrid(ctx, 10)
     ctx.strokeStyle = "grey"
+    
+    
 
     ctx.lineWidth = 2
     ctx.beginPath()
-    ctx.ellipse(mouseX, mouseY, 2, 2, 0, 0, 360)
+    ctx.ellipse(mousePos.x, mousePos.y, 2, 2, 0, 0, 360)
     ctx.stroke()
-    xCoordReadout.content = `${mouseX}`
+
+    var worldMousePos = viewportToWorld(mousePos)
+    xCoordReadout.content = `${worldMousePos.x}`
     xCoordReadout.rerender()
-    yCoordReadout.content = `${mouseY}`
+    yCoordReadout.content = `${worldMousePos.y}`
     yCoordReadout.rerender()
     ctx.lineWidth = 1
 
@@ -105,8 +135,8 @@ function render() {
         var tG = toolGuides[selectedTool]
         tG.draw(ctx, tG.controlPoints)
     }
-    lastMouseX = mouseX
-    lastMouseY = mouseY
+    lastMousePos.x = mousePos.x
+    lastMousePos.y = mousePos.y
     requestAnimationFrame(render)
 }
 
@@ -114,8 +144,16 @@ requestAnimationFrame(render)
 
 c.addEventListener("mousemove", (self, e) => {
     var  ev = e as MouseEvent
-    mouseX = ev.clientX
-    mouseY = ev.clientY
+    mousePos.x = ev.clientX
+    mousePos.y = ev.clientY
+    if (mouseDown && selectedMode == "move") {
+        posInWorld.x = mouseDownPos.x - mousePos.x
+        posInWorld.y = mouseDownPos.y - mousePos.y
+        console.log(mouseDownPos, mousePos, posInWorld)
+        yOffset.setValue(String(posInWorld.y)).applyLastChange()
+        xOffset.setValue(String(posInWorld.x)).applyLastChange()
+
+    }
 })
 
 const resizeObserver = new ResizeObserver(()=>{
@@ -139,7 +177,8 @@ const buttonStyles = new styleGroup([
 
 const modeButtons = {
     select: new button("select").addClass("selected"),
-    draw: new button("draw")
+    draw: new button("draw"),
+    move: new button("move")
 }
 
 var selectedMode = "select"
@@ -177,23 +216,29 @@ var selectedTool: string
 
 const toolGuides = {
     line: {
-        controlPoints: [[new Vec2(40,140)], [new Vec2(500,140)]],
+        controlPoints: [[viewportToWorld(new Vec2(40,140))], [viewportToWorld(new Vec2(500,140))]],
         draw: (ctx, controlPoints)=>{
             ctx.beginPath()
-            ctx.moveTo(controlPoints[0][0].x, controlPoints[0][0].y)
-            ctx.lineTo(controlPoints[1][0].x, controlPoints[1][0].y)
+            var vCoords = worldToViewport(controlPoints[0][0])
+            var vCoords1 = worldToViewport(controlPoints[1][0])
+
+            ctx.moveTo(vCoords.x, vCoords.y)
+            ctx.lineTo(vCoords1.x, vCoords1.y)
             ctx.stroke()
             drawControlPoints(ctx, controlPoints)
         }
     } as toolGuide,
     circle: {
-        controlPoints: [[new Vec2(240,140), new Vec2(400,140)]],
+        controlPoints: [[viewportToWorld(new Vec2(240,140)), viewportToWorld(new Vec2(400,140))]],
         draw: (ctx, controlPoints)=>{
+            var vRadiusCoords = worldToViewport(controlPoints[0][1])
+
             var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2))
             ctx.beginPath()
+            var vCentreCoords = worldToViewport(controlPoints[0][0])
             ctx.ellipse(
-                controlPoints[0][0].x,
-                controlPoints[0][0].y,
+                vCentreCoords.x,
+                vCentreCoords.y,
                 radius,
                 radius,
                 0,0,360
@@ -224,7 +269,12 @@ function selectTool(tool: string) {
 var xCoordReadout = new kleinTextNode("0")
 var yCoordReadout = new kleinTextNode("0")
 
-
+var xOffset = new textInput().setValue(String(posInWorld.x)).addEventListener("change", ()=> {
+    posInWorld.x = parseFloat(xOffset.htmlNode.value)
+})
+var yOffset = new textInput().setValue(String(posInWorld.y)).addEventListener("change", ()=> {
+    posInWorld.y = parseFloat(yOffset.htmlNode.value)
+})
 
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
@@ -241,7 +291,11 @@ const app = new container(
         new container(
             ...Object.values(modeButtons)
         ).addStyle("display: flex; gap: 0.2em;")
-    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;")
+    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;"),
+    new container(
+        xOffset,
+        yOffset
+    )
     
    
 )

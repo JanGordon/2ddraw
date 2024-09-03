@@ -429,21 +429,43 @@
       return this.canvas.getContext(contextId, options);
     }
   };
+  var textInput = class extends kleinElementNode {
+    htmlNode;
+    name = "textInput";
+    render(target) {
+      let element = document.createElement("input");
+      element.type = "text";
+      renderBasics(this, element);
+      target.appendChild(element);
+    }
+    setValue(val) {
+      this.changes.push(() => {
+        this.htmlNode.value = val;
+      });
+      return this;
+    }
+  };
 
   // grid.ts
+  var worldWidth = 1e3;
+  var worldHeight = 1e3;
   function drawGrid(ctx2, interval) {
     ctx2.lineWidth = 0.4;
     ctx2.strokeStyle = "lightgrey";
-    for (let y = 0; y <= ctx2.canvas.height; y += interval) {
+    for (let y = 0; y <= worldHeight; y += interval) {
+      var vStart = worldToViewport(new Vec2(0, y));
+      var vEnd = worldToViewport(new Vec2(worldWidth, y));
       ctx2.beginPath();
-      ctx2.moveTo(0, y);
-      ctx2.lineTo(ctx2.canvas.width, y);
+      ctx2.moveTo(vStart.x, vStart.y);
+      ctx2.lineTo(vEnd.x, vEnd.y);
       ctx2.stroke();
     }
-    for (let x = 0; x <= ctx2.canvas.width; x += interval) {
+    for (let x = 0; x <= worldWidth; x += interval) {
+      var vStart = worldToViewport(new Vec2(x, 0));
+      var vEnd = worldToViewport(new Vec2(x, worldWidth));
       ctx2.beginPath();
-      ctx2.moveTo(x, 0);
-      ctx2.lineTo(x, ctx2.canvas.height);
+      ctx2.moveTo(vStart.x, vStart.y);
+      ctx2.lineTo(vEnd.x, vEnd.y);
       ctx2.stroke();
     }
   }
@@ -458,10 +480,23 @@
       this.y = y;
     }
   };
+  var posInWorld = new Vec2(100, 0);
+  var zoomFactor = 1;
+  function viewportToWorld(pos) {
+    return new Vec2(
+      pos.x * zoomFactor + posInWorld.x,
+      pos.y * zoomFactor + posInWorld.y
+    );
+  }
+  function worldToViewport(pos) {
+    return new Vec2(
+      (pos.x - posInWorld.x) / zoomFactor,
+      (pos.y - posInWorld.y) / zoomFactor
+    );
+  }
   var c = new canvas();
   var ctx = c.getContext("2d");
-  var mouseX = 0;
-  var mouseY = 0;
+  var mousePos = new Vec2(0, 0);
   var mouseDown = false;
   function near(a, b, distance) {
     return a == b || b - a < distance && a - b < distance;
@@ -473,31 +508,37 @@
     for (let c2 of controlPoints) {
       for (let i of c2) {
         ctx2.beginPath();
-        ctx2.ellipse(i.x, i.y, 3, 3, 0, 0, 360);
+        var vCoords = worldToViewport(i);
+        ctx2.ellipse(vCoords.x, vCoords.y, 3, 3, 0, 0, 360);
         ctx2.stroke();
         if (mouseDown && selectedMode == "select") {
-          if (near(mouseX, i.x, controlSnapDistance) && near(mouseY, i.y, controlSnapDistance)) {
+          if (near(mousePos.x, vCoords.x, controlSnapDistance) && near(mousePos.y, vCoords.y, controlSnapDistance)) {
             draggingItems.push(i);
           }
           if (draggingItems.includes(i)) {
             if (i == c2[0] && c2.length > 1) {
               var yOffsetToOtherControlPoint = i.y - c2[1].y;
               var xOffsetToOtherControlPoint = i.x - c2[1].x;
-              i.x = mouseX;
-              i.y = mouseY;
-              c2[1].x = mouseX - xOffsetToOtherControlPoint;
-              c2[1].y = mouseY - yOffsetToOtherControlPoint;
+              var newI = viewportToWorld(mousePos);
+              i.x = newI.x;
+              i.y = newI.y;
+              var newNeighbour = viewportToWorld(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint));
+              c2[1].x = newNeighbour.x;
+              c2[1].y = newNeighbour.y;
             } else {
-              i.x = mouseX;
-              i.y = mouseY;
+              var newI = viewportToWorld(mousePos);
+              i.x = newI.x;
+              i.y = newI.y;
             }
           }
         }
       }
     }
   }
+  var mouseDownPos = new Vec2(0, 0);
   c.addEventListener("mousedown", () => {
     mouseDown = true;
+    mouseDownPos = viewportToWorld(mousePos);
   });
   document.addEventListener("mouseup", () => {
     mouseDown = false;
@@ -511,34 +552,41 @@
       selectMode("select");
     }
   });
-  var lastMouseX = 0;
-  var lastMouseY = 0;
+  var lastMousePos = new Vec2(0, 0);
   function render() {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     drawGrid(ctx, 10);
     ctx.strokeStyle = "grey";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(mouseX, mouseY, 2, 2, 0, 0, 360);
+    ctx.ellipse(mousePos.x, mousePos.y, 2, 2, 0, 0, 360);
     ctx.stroke();
-    xCoordReadout.content = `${mouseX}`;
+    var worldMousePos = viewportToWorld(mousePos);
+    xCoordReadout.content = `${worldMousePos.x}`;
     xCoordReadout.rerender();
-    yCoordReadout.content = `${mouseY}`;
+    yCoordReadout.content = `${worldMousePos.y}`;
     yCoordReadout.rerender();
     ctx.lineWidth = 1;
     if (selectedTool) {
       var tG = toolGuides[selectedTool];
       tG.draw(ctx, tG.controlPoints);
     }
-    lastMouseX = mouseX;
-    lastMouseY = mouseY;
+    lastMousePos.x = mousePos.x;
+    lastMousePos.y = mousePos.y;
     requestAnimationFrame(render);
   }
   requestAnimationFrame(render);
   c.addEventListener("mousemove", (self, e) => {
     var ev = e;
-    mouseX = ev.clientX;
-    mouseY = ev.clientY;
+    mousePos.x = ev.clientX;
+    mousePos.y = ev.clientY;
+    if (mouseDown && selectedMode == "move") {
+      posInWorld.x = mouseDownPos.x - mousePos.x;
+      posInWorld.y = mouseDownPos.y - mousePos.y;
+      console.log(mouseDownPos, mousePos, posInWorld);
+      yOffset.setValue(String(posInWorld.y)).applyLastChange();
+      xOffset.setValue(String(posInWorld.x)).applyLastChange();
+    }
   });
   var resizeObserver = new ResizeObserver(() => {
     c.setAttribute("width", `${c.htmlNode.clientWidth}`);
@@ -558,7 +606,8 @@
   ], "btn");
   var modeButtons = {
     select: new button("select").addClass("selected"),
-    draw: new button("draw")
+    draw: new button("draw"),
+    move: new button("move")
   };
   var selectedMode = "select";
   for (let i of Object.entries(modeButtons)) {
@@ -580,23 +629,27 @@
   var selectedTool;
   var toolGuides = {
     line: {
-      controlPoints: [[new Vec2(40, 140)], [new Vec2(500, 140)]],
+      controlPoints: [[viewportToWorld(new Vec2(40, 140))], [viewportToWorld(new Vec2(500, 140))]],
       draw: (ctx2, controlPoints) => {
         ctx2.beginPath();
-        ctx2.moveTo(controlPoints[0][0].x, controlPoints[0][0].y);
-        ctx2.lineTo(controlPoints[1][0].x, controlPoints[1][0].y);
+        var vCoords = worldToViewport(controlPoints[0][0]);
+        var vCoords1 = worldToViewport(controlPoints[1][0]);
+        ctx2.moveTo(vCoords.x, vCoords.y);
+        ctx2.lineTo(vCoords1.x, vCoords1.y);
         ctx2.stroke();
         drawControlPoints(ctx2, controlPoints);
       }
     },
     circle: {
-      controlPoints: [[new Vec2(240, 140), new Vec2(400, 140)]],
+      controlPoints: [[viewportToWorld(new Vec2(240, 140)), viewportToWorld(new Vec2(400, 140))]],
       draw: (ctx2, controlPoints) => {
+        var vRadiusCoords = worldToViewport(controlPoints[0][1]);
         var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
         ctx2.beginPath();
+        var vCentreCoords = worldToViewport(controlPoints[0][0]);
         ctx2.ellipse(
-          controlPoints[0][0].x,
-          controlPoints[0][0].y,
+          vCentreCoords.x,
+          vCentreCoords.y,
           radius,
           radius,
           0,
@@ -623,6 +676,12 @@
   }
   var xCoordReadout = new kleinTextNode("0");
   var yCoordReadout = new kleinTextNode("0");
+  var xOffset = new textInput().setValue(String(posInWorld.x)).addEventListener("change", () => {
+    posInWorld.x = parseFloat(xOffset.htmlNode.value);
+  });
+  var yOffset = new textInput().setValue(String(posInWorld.y)).addEventListener("change", () => {
+    posInWorld.y = parseFloat(yOffset.htmlNode.value);
+  });
   var app = new container(
     new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
@@ -636,7 +695,11 @@
       new container(
         ...Object.values(modeButtons)
       ).addStyle("display: flex; gap: 0.2em;")
-    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;")
+    ).addStyle("display: flex; flex-direction: column; gap: 0.2em;"),
+    new container(
+      xOffset,
+      yOffset
+    )
   );
   renderApp(app, document.getElementById("app"));
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
