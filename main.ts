@@ -83,11 +83,13 @@ function angle(v1: Vec2, v2: Vec2): number {
 }
 
 function closestPointOnLine(lineStart: Vec2, lineEnd: Vec2) {
+
+    var mousePosWorld = viewportToWorld(mousePos)
     // Calculate the vector from lineStart to lineEnd
     const lineVector = new Vec2(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y)
 
     // Calculate the vector from lineStart to the cursor
-    const cursorVector = new Vec2(mousePos.x - lineStart.x, mousePos.y - lineStart.y)
+    const cursorVector = new Vec2(mousePosWorld.x - lineStart.x, mousePosWorld.y - lineStart.y)
 
     // Calculate the dot product of the two vectors
     const dotProduct = lineVector.x * cursorVector.x + lineVector.y * cursorVector.y;
@@ -367,7 +369,7 @@ const shapeGenerators = {
     line: {
         handleStartDraw: (controlPoints)=>{
             var p = new linePath()
-            p.controlPoints[0][0] = new Vec2(mousePos.x, mousePos.y)
+            p.controlPoints[0][0] = viewportToWorld(mousePos)
 
             p.controlPoints[1][0] = new Vec2(p.start.x ,p.start.y)
             currentPart.paths.push(p)
@@ -385,27 +387,11 @@ const shapeGenerators = {
         centerControlPoints: (self)=>{
             self.controlPoints = [[viewportToWorld(new Vec2(c.htmlNode.width/2,c.htmlNode.height/2)), viewportToWorld(new Vec2(c.htmlNode.width/2+100,c.htmlNode.height/2))]]
         },
-        draw: (ctx, controlPoints)=>{
-
-            var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2))
-            ctx.beginPath()
-            var vCentreCoords = worldToViewport(controlPoints[0][0])
-            ctx.ellipse(
-                vCentreCoords.x,
-                vCentreCoords.y,
-                radius,
-                radius,
-                0,0,360
-                
-            )
-            ctx.stroke()
-            drawControlPoints(ctx, controlPoints)
-        },
         handleStartDraw: (controlPoints)=>{
             var p = new ellipticalPath()
             console.log(controlPoints)
-            p.controlPoints[0][0] = new Vec2(mousePos.x, mousePos.y)
-            p.controlPoints[0][1] = new Vec2(mousePos.x, mousePos.y)
+            p.controlPoints[0][0] = viewportToWorld(mousePos)
+            p.controlPoints[0][1] = viewportToWorld(mousePos)
             p.controlPoints[1][0] = p.controlPoints[0][1]
             p.controlPoints[2][0] = p.controlPoints[0][1]
 
@@ -415,7 +401,7 @@ const shapeGenerators = {
         },
         handleDraw: (controlPoints)=>{
             var p = currentPath as ellipticalPath
-            p.controlPoints[0][1] = new Vec2(mousePos.x, mousePos.y)
+            p.controlPoints[0][1] = viewportToWorld(mousePos)
 
         }
     } as toolGuide,
@@ -497,7 +483,7 @@ const toolGuides = {
         centerControlPoints: ()=>{},
         handleStartDraw: ()=>{
             var p = new freePath()
-            p.controlPoints = [[new Vec2(mouseDownPos.x, mouseDownPos.y)]]
+            p.controlPoints = [[viewportToWorld(mouseDownPos)]]
             currentPart.paths.push(p)
             currentPath = p
             console.log(currentPath)
@@ -508,7 +494,7 @@ const toolGuides = {
             if (near2d(mousePos, lastSegment, freehandSegmentLength)) {
                 // wait and dont update last segment 
             } else {
-                (currentPath as freePath).controlPoints.push([new Vec2(mousePos.x, mousePos.y)])
+                (currentPath as freePath).controlPoints.push([viewportToWorld(mousePos)])
             }
         }
     } as toolGuide,

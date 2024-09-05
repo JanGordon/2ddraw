@@ -1,4 +1,4 @@
-import { mousePos, Vec2 } from "./main"
+import { mousePos, Vec2, worldToViewport } from "./main"
 
 
 
@@ -26,7 +26,8 @@ export class ellipticalPath implements Path {
     }
     draw(ctx: CanvasRenderingContext2D) {
         ctx.beginPath()
-        ctx.ellipse(this.center.x, this.center.y, this.radius, this.radius, 0, this.startAngle, this.endAngle)
+        var cViewport = worldToViewport(this.center)
+        ctx.ellipse(cViewport.x, cViewport.y, this.radius, this.radius, 0, this.startAngle, this.endAngle)
         ctx.stroke()
     }
 }
@@ -36,8 +37,10 @@ export class freePath implements Path {
     draw(ctx: CanvasRenderingContext2D) {
         ctx.beginPath()
         for (let s = 1; s < this.controlPoints.length; s++) {
-            ctx.moveTo(this.controlPoints[s-1][0].x, this.controlPoints[s-1][0].y)
-            ctx.lineTo(this.controlPoints[s][0].x, this.controlPoints[s][0].y)
+            var vStart = worldToViewport(this.controlPoints[s-1][0])
+            var vEnd = worldToViewport(this.controlPoints[s][0])
+            ctx.moveTo(vStart.x, vStart.y)
+            ctx.lineTo(vEnd.x, vEnd.y)
         }
         ctx.stroke()
         
@@ -54,8 +57,10 @@ export class linePath implements Path {
     }
     draw(ctx: CanvasRenderingContext2D) {
         ctx.beginPath()
-        ctx.moveTo(this.start.x, this.start.y)
-        ctx.lineTo(this.end.x, this.end.y)
+        var vStart = worldToViewport(this.start)
+        var vEnd = worldToViewport(this.end)
+        ctx.moveTo(vStart.x, vStart.y)
+        ctx.lineTo(vEnd.x, vEnd.y)
         ctx.stroke()
         
     }
