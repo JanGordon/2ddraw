@@ -376,8 +376,7 @@ const shapeGenerators = {
         },
         handleDraw: (controlPoints)=>{
             var c = currentPath as linePath
-            c.controlPoints[1][0].x = mousePos.x 
-            c.controlPoints[1][0].y = mousePos.y
+            c.controlPoints[1][0] = viewportToWorld(mousePos)
   
         }
         
