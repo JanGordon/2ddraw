@@ -541,6 +541,25 @@
       ctx2.stroke();
     }
   };
+  var ngonPath = class {
+    constructor() {
+      this.controlPoints = [[]];
+    }
+    draw(ctx2) {
+      ctx2.beginPath();
+      for (let i = 2; i < this.controlPoints[0].length; i++) {
+        var vStart = worldToViewport(this.controlPoints[0][i - 1]);
+        var vEnd = worldToViewport(this.controlPoints[0][i]);
+        ctx2.moveTo(vStart.x, vStart.y);
+        ctx2.lineTo(vEnd.x, vEnd.y);
+      }
+      var vStart = worldToViewport(this.controlPoints[0][this.controlPoints[0].length - 1]);
+      var vEnd = worldToViewport(this.controlPoints[0][1]);
+      ctx2.moveTo(vStart.x, vStart.y);
+      ctx2.lineTo(vEnd.x, vEnd.y);
+      ctx2.stroke();
+    }
+  };
   var parts = [];
   var Part = class {
     constructor(name) {
@@ -632,10 +651,14 @@
   ], "inpt");
 
   // src/shapes.ts
+  var ngonSides = 3;
   var shapeButtons = {
     line: new button("line").setAttribute("title", "line (w)").addClass("selected"),
     circle: new button("circle").setAttribute("title", "circle (e)"),
-    rectangle: new button("rectangle").setAttribute("title", "rectangle (r)")
+    rectangle: new button("rectangle").setAttribute("title", "rectangle (r)"),
+    ngon: new container("n-agon:", new textInput().setValue("3").setAttribute("type", "number").addEventListener("change", (self) => {
+      ngonSides = parseInt(self.htmlNode.value);
+    })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px")
   };
   var shapeGenerators = {
     line: {
@@ -667,6 +690,32 @@
         var p = currentPart2.currentPath;
         p.controlPoints[0][1] = viewportToWorld2(mousePos2);
       }
+    },
+    ngon: {
+      handleStartDraw: (controlPoints) => {
+        var p = new ngonPath();
+        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
+        console.log(`center: X:${p.controlPoints[0][0].x} Y:${p.controlPoints[0][0].y}`);
+        var radius = 20;
+        for (let i = 0; i < ngonSides; i++) {
+          var a = 360 / ngonSides * i;
+          p.controlPoints[0][i + 1] = new Vec2(0, 0);
+          p.controlPoints[0][i + 1].x = Math.sin(a * (Math.PI / 180)) * radius + p.controlPoints[0][0].x;
+          p.controlPoints[0][i + 1].y = Math.cos(a * (Math.PI / 180)) * radius + p.controlPoints[0][0].y;
+        }
+        currentPart2.paths.push(p);
+      },
+      handleDraw: (controlPoints) => {
+        var c2 = currentPart2.currentPath;
+        c2.controlPoints[0][1] = viewportToWorld2(mousePos2);
+        var radius = Math.sqrt(Math.pow(c2.controlPoints[0][0].x - c2.controlPoints[0][1].x, 2) + Math.pow(c2.controlPoints[0][0].y - c2.controlPoints[0][1].y, 2));
+        console.log(radius);
+        for (let i = 0; i < ngonSides; i++) {
+          var a = 360 / ngonSides * i;
+          c2.controlPoints[0][i + 1].x = Math.sin(a * (Math.PI / 180)) * radius + c2.controlPoints[0][0].x;
+          c2.controlPoints[0][i + 1].y = Math.cos(a * (Math.PI / 180)) * radius + c2.controlPoints[0][0].y;
+        }
+      }
     }
   };
   registerKeybind("w", () => {
@@ -683,6 +732,7 @@
   for (let i of Object.entries(shapeButtons)) {
     i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
       selectShape(i[0]);
+      console.log("selecting", i[0]);
     });
   }
   function selectShape(shape) {
@@ -888,14 +938,16 @@
           }
           if (draggingItems.includes(i)) {
             if (i == c2[0] && c2.length > 1) {
-              var yOffsetToOtherControlPoint = i.y - c2[1].y;
-              var xOffsetToOtherControlPoint = i.x - c2[1].x;
+              for (let p = 1; p < c2.length; p++) {
+                var yOffsetToOtherControlPoint = i.y - c2[p].y;
+                var xOffsetToOtherControlPoint = i.x - c2[p].x;
+                var newNeighbour = viewportToWorld2(new Vec2(mousePos2.x - xOffsetToOtherControlPoint, mousePos2.y - yOffsetToOtherControlPoint));
+                c2[p].x = newNeighbour.x;
+                c2[p].y = newNeighbour.y;
+              }
               var newI = viewportToWorld2(mousePos2);
               i.x = newI.x;
               i.y = newI.y;
-              var newNeighbour = viewportToWorld2(new Vec2(mousePos2.x - xOffsetToOtherControlPoint, mousePos2.y - yOffsetToOtherControlPoint));
-              c2[1].x = newNeighbour.x;
-              c2[1].y = newNeighbour.y;
             } else {
               var newI = viewportToWorld2(mousePos2);
               i.x = newI.x;
@@ -1092,15 +1144,43 @@
     part.listNode.addClass("selected").applyLastChange();
     currentPart2 = part;
   }
+  function menuList(title, items) {
+    const dropIcon = new kleinTextNode("\u02C5");
+    return new container(new button(title, new container(dropIcon).addStyle("margin-left: auto;")).addEventListener("click", (self) => {
+      if (self.hasClass("hidden")) {
+        for (let i of self.parent.children) {
+          if (i != self) {
+            i.addStyle("display: block;").applyLastChange();
+          }
+        }
+        self.removeClass("hidden").applyLastChange();
+        dropIcon.content = "\u02C5";
+        dropIcon.rerender();
+      } else {
+        for (let i of self.parent.children) {
+          if (i != self) {
+            i.addStyle("display: none;").applyLastChange();
+          }
+        }
+        self.addClass("hidden").applyLastChange();
+        dropIcon.content = "\u02C4";
+        dropIcon.rerender();
+      }
+    }).addStyle("display: flex; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
+  }
   var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: crosshair;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
     currentPart2.paths = [];
-  }), "Guides", ...Object.values(toolButtons), "Shapes", ...Object.values(shapeButtons), "Modes", ...Object.values(modeButtons), "Grid", new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
-    snapDistance = parseInt(self.htmlNode.value);
-  })).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"), new container("Major:", new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
-    gridMajorInterval = parseInt(self.htmlNode.value);
-  })).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"), new container("Minor:", new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
-    gridMinorInterval = parseInt(self.htmlNode.value);
-  })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px"), "Parts", new container(partList, new button("+").addEventListener("click", (self) => {
+  }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
+    new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+      snapDistance = parseInt(self.htmlNode.value);
+    })).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"),
+    new container("Major:", new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+      gridMajorInterval = parseInt(self.htmlNode.value);
+    })).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"),
+    new container("Minor:", new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+      gridMinorInterval = parseInt(self.htmlNode.value);
+    })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px")
+  ]), menuList("Parts", [new container(partList, new button("+").addEventListener("click", (self) => {
     var newPart = new Part();
     parts.push(newPart);
     partList.addChildren(newPart.listNode.addEventListener("click", () => {
@@ -1108,7 +1188,7 @@
     }));
     partList.lightRerender();
     selectPart(newPart);
-  })).addToStyleGroup(partListStyles)).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
+  })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
   renderApp(app, document.getElementById("app"));
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);

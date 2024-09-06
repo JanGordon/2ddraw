@@ -68,6 +68,26 @@ export class linePath implements Path {
     }
 }
 
+export class ngonPath implements Path {
+    controlPoints: Vec2[][] = [[]]
+    draw(ctx: CanvasRenderingContext2D) {
+        ctx.beginPath()
+        for (let i = 2; i < this.controlPoints[0].length; i++) {
+            var vStart = worldToViewport(this.controlPoints[0][i-1])
+            var vEnd = worldToViewport(this.controlPoints[0][i])
+            ctx.moveTo(vStart.x, vStart.y)
+            ctx.lineTo(vEnd.x, vEnd.y)
+        }
+        var vStart = worldToViewport(this.controlPoints[0][this.controlPoints[0].length-1])
+        var vEnd = worldToViewport(this.controlPoints[0][1])
+        ctx.moveTo(vStart.x, vStart.y)
+        ctx.lineTo(vEnd.x, vEnd.y)
+        
+        ctx.stroke()
+        
+    }
+}
+
 export var parts: Part[] = []
 
 

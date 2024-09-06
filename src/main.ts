@@ -1,5 +1,5 @@
 import { button, canvas, container, textInput } from "kleinui/elements"
-import { kleinTextNode, renderApp, styleGroup } from "kleinui"
+import { kleinElementNode, kleinTextNode, renderApp, styleGroup } from "kleinui"
 import { keys, registerKeybind } from "./keys"
 import { drawGrid } from "./grid"
 import { ellipticalPath, freePath, linePath, Part, parts, Path } from "./part"
@@ -72,14 +72,19 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
                 }
                 if (draggingItems.includes(i)) {
                     if (i == c[0] && c.length > 1) {
-                        var yOffsetToOtherControlPoint = i.y - c[1].y
-                        var xOffsetToOtherControlPoint = i.x - c[1].x
+                        
+                        
+                        for (let p = 1; p < c.length; p++) {
+                            var yOffsetToOtherControlPoint = i.y - c[p].y
+                            var xOffsetToOtherControlPoint = i.x - c[p].x
+                            var newNeighbour = viewportToWorld(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint))
+                            c[p].x = newNeighbour.x
+                            c[p].y = newNeighbour.y
+                        }
                         var newI = viewportToWorld(mousePos)
                         i.x = newI.x
                         i.y = newI.y
-                        var newNeighbour = viewportToWorld(new Vec2(mousePos.x - xOffsetToOtherControlPoint, mousePos.y - yOffsetToOtherControlPoint))
-                        c[1].x = newNeighbour.x
-                        c[1].y = newNeighbour.y
+                        
                     } else {
                         var newI = viewportToWorld(mousePos)
                         i.x = newI.x
@@ -340,6 +345,35 @@ function selectPart(part: Part) {
     currentPart = part
 }
 
+function menuList(title: string, items: kleinElementNode[]) {
+    const dropIcon = new kleinTextNode("˅")
+    return new container(
+        new button(title,new container(dropIcon).addStyle("margin-left: auto;")).addEventListener("click", (self) => {
+            if (self.hasClass("hidden")) {
+                for (let i of self.parent!.children) {
+                    if (i != self) {
+                        i.addStyle("display: block;").applyLastChange()
+                    }
+                }
+                self.removeClass("hidden").applyLastChange()
+                dropIcon.content = "˅"
+                dropIcon.rerender()
+            } else {
+                for (let i of self.parent!.children) {
+                    if (i != self) {
+                        i.addStyle("display: none;").applyLastChange()
+                    }
+                }
+                self.addClass("hidden").applyLastChange()
+                dropIcon.content = "˄"
+                dropIcon.rerender()
+            }
+            
+        }).addStyle("display: flex; border: none; background-color: transparent;"),
+        ...items
+    ).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;")
+}
+
 
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
@@ -351,47 +385,47 @@ const app = new container(
                 // ctx.stroke()
             }), 
             // new container().addToStyleGroup(hrStyles),
-            "Guides",
-            ...Object.values(toolButtons),
+            menuList("Guides", Object.values(toolButtons)),
             // new container().addToStyleGroup(hrStyles),
-            "Shapes",
-            ...Object.values(shapeButtons),
+            menuList("Shapes", Object.values(shapeButtons)),
             // new container().addToStyleGroup(hrStyles),
-            "Modes",
-            ...Object.values(modeButtons),
-            "Grid",
-            new container(
-                "Snap:",
-                new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
-                    snapDistance = parseInt(self.htmlNode.value)
-                }),
-            ).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"),
-            new container(
-                "Major:",
-                new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
-                    gridMajorInterval = parseInt(self.htmlNode.value)
-                }),
-            ).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"),
-            new container(
-                "Minor:",
-                new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
-                    gridMinorInterval = parseInt(self.htmlNode.value)
-                }),
-            ).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px"),
-            "Parts",
-            new container(
-                partList,
-                new button("+").addEventListener("click", (self)=>{
-                    var newPart = new Part()
-                    parts.push(newPart)
-                    partList.addChildren(
-                        newPart.listNode.addEventListener("click", ()=>{selectPart(newPart)})
-                    )
-                    
-                    partList.lightRerender()
-                    selectPart(newPart)
-                })
-            ).addToStyleGroup(partListStyles)
+            menuList("Modes", Object.values(modeButtons)),
+            menuList("Grid", [
+                new container(
+                    "Snap:",
+                    new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                        snapDistance = parseInt(self.htmlNode.value)
+                    }),
+                ).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"),
+                new container(
+                    "Major:",
+                    new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                        gridMajorInterval = parseInt(self.htmlNode.value)
+                    }),
+                ).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"),
+                new container(
+                    "Minor:",
+                    new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                        gridMinorInterval = parseInt(self.htmlNode.value)
+                    }),
+                ).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px"),
+            ]),
+            menuList("Parts", 
+                [new container(
+                    partList,
+                    new button("+").addEventListener("click", (self)=>{
+                        var newPart = new Part()
+                        parts.push(newPart)
+                        partList.addChildren(
+                            newPart.listNode.addEventListener("click", ()=>{selectPart(newPart)})
+                        )
+                        
+                        partList.lightRerender()
+                        selectPart(newPart)
+                    })
+                ).addToStyleGroup(partListStyles)]
+            )
+            
     ).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"),
     new container(
         xOffset,
