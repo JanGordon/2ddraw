@@ -1,7 +1,7 @@
-import { button, container } from "kleinui/elements"
+import { button, canvas, container } from "kleinui/elements"
 import { currentPart, mousePos, worldToViewport } from "./main"
 import { Vec2 } from "./vec"
-import { kleinTextNode } from "kleinui"
+import { kleinTextNode, styleGroup } from "kleinui"
 
 
 export interface Path {
@@ -90,6 +90,20 @@ export class ngonPath implements Path {
 
 export var parts: Part[] = []
 
+const visiblityStyles = new styleGroup([
+    [".vis.hidden:before", `
+        content: "";
+        position: absolute;
+        width: 100%;
+        height: 2px;
+        background-color: black;
+        rotate: 45deg;
+        top: 30%;
+        transform-origin: 50% 50%;
+        translate: 0 50%;
+    `]
+], "vis")
+
 
 export class Part {
     paths: Path[] = []
@@ -106,20 +120,32 @@ export class Part {
         this.listNode.children[0].rerender()
     }
 
+    previewCtx: CanvasRenderingContext2D
+
     constructor(name?: string) {
         this._name = name ? name : `Part ${parts.length+1}`
-        this.listNode = new container(this.name, new button("👁").addStyle("margin-left: auto; padding: 0;").addEventListener("click", (self)=>{
-            if (this.visible) {
-                (self.children[0] as kleinTextNode).content = "😄"
-                self.children[0].rerender()
-                this.visible = false
-            } else {
-                (self.children[0] as kleinTextNode).content = "👁"
-                self.children[0].rerender()
-                this.visible = true
-            }
-            
-        })).addClass("item")
+        var previewCanvas = new canvas()
+        this.previewCtx = previewCanvas.getContext("2d")!
+        this.listNode = new container(
+            this.name,
+            previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"),
+
+            new button("👁")
+                .addToStyleGroup(visiblityStyles)
+                .addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;")
+                .addEventListener("click", (self)=>{
+                    if (this.visible) {
+                        self.addClass("hidden").applyLastChange()
+                        this.visible = false
+                    } else {
+                        self.removeClass("hidden").applyLastChange()
+                        this.visible = true
+                    }
+            }),
+
+        ).addClass("item").addStyle("position: relative;")
+
+        
     }
     draw(ctx: CanvasRenderingContext2D) {
         ctx.lineWidth = 3

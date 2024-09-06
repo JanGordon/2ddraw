@@ -561,6 +561,19 @@
     }
   };
   var parts = [];
+  var visiblityStyles = new styleGroup([
+    [".vis.hidden:before", `
+        content: "";
+        position: absolute;
+        width: 100%;
+        height: 2px;
+        background-color: black;
+        rotate: 45deg;
+        top: 30%;
+        transform-origin: 50% 50%;
+        translate: 0 50%;
+    `]
+  ], "vis");
   var Part = class {
     constructor(name) {
       this.paths = [];
@@ -568,17 +581,17 @@
       this.recordingDraw = false;
       this.visible = true;
       this._name = name ? name : `Part ${parts.length + 1}`;
-      this.listNode = new container(this.name, new button("\u{1F441}").addStyle("margin-left: auto; padding: 0;").addEventListener("click", (self) => {
+      var previewCanvas = new canvas();
+      this.previewCtx = previewCanvas.getContext("2d");
+      this.listNode = new container(this.name, previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"), new button("\u{1F441}").addToStyleGroup(visiblityStyles).addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;").addEventListener("click", (self) => {
         if (this.visible) {
-          self.children[0].content = "\u{1F604}";
-          self.children[0].rerender();
+          self.addClass("hidden").applyLastChange();
           this.visible = false;
         } else {
-          self.children[0].content = "\u{1F441}";
-          self.children[0].rerender();
+          self.removeClass("hidden").applyLastChange();
           this.visible = true;
         }
-      })).addClass("item");
+      })).addClass("item").addStyle("position: relative;");
     }
     get currentPath() {
       return this.paths[this.paths.length - 1];
@@ -1010,8 +1023,17 @@
     drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval);
     ctx.strokeStyle = "grey";
     ctx.lineWidth = 2;
+    ctx.strokeStyle = "red";
     ctx.beginPath();
-    ctx.ellipse(mousePos2.x, mousePos2.y, 2, 2, 0, 0, 360);
+    ctx.fillStyle = "red";
+    ctx.ellipse(mousePos2.x, mousePos2.y, 3, 3, 0, 0, 360);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "black";
+    ctx.strokeStyle = "black";
+    ctx.beginPath();
+    ctx.ellipse(pointerPos.x, pointerPos.y, 2, 2, 0, 0, 360);
+    ctx.fill();
     ctx.stroke();
     var worldMousePos = viewportToWorld2(mousePos2);
     xCoordReadout.content = `${worldMousePos.x}`;
@@ -1034,6 +1056,8 @@
     for (let i of parts) {
       if (i.visible) {
         i.draw(ctx);
+        i.previewCtx.clearRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
+        i.draw(i.previewCtx);
       }
     }
     lastMousePos.x = mousePos2.x;
@@ -1104,10 +1128,12 @@
     [".part-list-container > .list > .item", `
         width: 100%;
         aspect-ratio: 16 / 9;
-        border: 1px solid black;
+        border: 1px solid rgb(153,153,153);
         border-radius: 3px;
         box-sizing: border-box;
         background-color: white;
+        padding: 0.2em;
+        display: flex;
     `],
     [".part-list-container > .list > .item.selected", `
         font-weight: bolder;
@@ -1166,9 +1192,9 @@
         dropIcon.content = "\u02C4";
         dropIcon.rerender();
       }
-    }).addStyle("display: flex; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
+    }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
   }
-  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: crosshair;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
     currentPart2.paths = [];
   }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
     new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {

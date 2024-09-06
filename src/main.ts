@@ -172,8 +172,25 @@ function render() {
     
 
     ctx.lineWidth = 2
+    ctx.strokeStyle = "red"
+
     ctx.beginPath()
-    ctx.ellipse(mousePos.x, mousePos.y, 2, 2, 0, 0, 360)
+    ctx.fillStyle = "red"
+    ctx.ellipse(mousePos.x, mousePos.y, 3, 3, 0, 0, 360)
+    ctx.fill()
+
+    ctx.stroke()
+
+
+    ctx.fillStyle = "black"
+
+    ctx.strokeStyle = "black"
+
+
+    ctx.beginPath()
+    ctx.ellipse(pointerPos.x, pointerPos.y, 2, 2, 0, 0, 360)
+    ctx.fill()
+
     ctx.stroke()
 
     var worldMousePos = viewportToWorld(mousePos)
@@ -199,6 +216,8 @@ function render() {
     for (let i of parts) {
         if (i.visible) {
             i.draw(ctx)
+            i.previewCtx.clearRect(0,0, i.previewCtx.canvas.width, i.previewCtx.canvas.height)
+            i.draw(i.previewCtx)
         }
     }
     lastMousePos.x = mousePos.x
@@ -295,10 +314,12 @@ var partListStyles = new styleGroup([
     [".part-list-container > .list > .item", `
         width: 100%;
         aspect-ratio: 16 / 9;
-        border: 1px solid black;
+        border: 1px solid rgb(153,153,153);
         border-radius: 3px;
         box-sizing: border-box;
         background-color: white;
+        padding: 0.2em;
+        display: flex;
     `],
 
     [".part-list-container > .list > .item.selected", `
@@ -369,7 +390,7 @@ function menuList(title: string, items: kleinElementNode[]) {
                 dropIcon.rerender()
             }
             
-        }).addStyle("display: flex; border: none; background-color: transparent;"),
+        }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"),
         ...items
     ).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;")
 }
@@ -377,7 +398,7 @@ function menuList(title: string, items: kleinElementNode[]) {
 
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
-    c.addStyle("width: 100%; height: 100%; cursor: crosshair;"),
+    c.addStyle("width: 100%; height: 100%; cursor: none;"),
 
     new container(
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
