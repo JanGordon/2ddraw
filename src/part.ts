@@ -1,5 +1,7 @@
-import { mousePos, Vec2, worldToViewport } from "./main"
-
+import { button, container } from "kleinui/elements"
+import { currentPart, mousePos, worldToViewport } from "./main"
+import { Vec2 } from "./vec"
+import { kleinTextNode } from "kleinui"
 
 
 export interface Path {
@@ -66,12 +68,47 @@ export class linePath implements Path {
     }
 }
 
+export var parts: Part[] = []
+
+
 export class Part {
     paths: Path[] = []
+    get currentPath() {
+        return this.paths[this.paths.length -1]
+    }
+    _name: string = "Part"
+    get name() {
+        return this._name
+    }
+    set name(s: string) {
+        this._name = s;
+        (this.listNode.children[0] as kleinTextNode).content = s
+        this.listNode.children[0].rerender()
+    }
+
+    constructor(name?: string) {
+        this._name = name ? name : `Part ${parts.length+1}`
+        this.listNode = new container(this.name, new button("👁").addStyle("margin-left: auto; padding: 0;").addEventListener("click", (self)=>{
+            if (this.visible) {
+                (self.children[0] as kleinTextNode).content = "😄"
+                self.children[0].rerender()
+                this.visible = false
+            } else {
+                (self.children[0] as kleinTextNode).content = "👁"
+                self.children[0].rerender()
+                this.visible = true
+            }
+            
+        })).addClass("item")
+    }
     draw(ctx: CanvasRenderingContext2D) {
         ctx.lineWidth = 3
         for (let p of this.paths) {
             p.draw(ctx)
         }
     }
+    recordingDraw = false
+    visible = true
+    listNode: container
 }
+

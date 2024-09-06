@@ -429,29 +429,24 @@
     }
   };
 
-  // keys.ts
-  var keys = /* @__PURE__ */ new Map([]);
-  var keybinds = /* @__PURE__ */ new Map([]);
-  document.addEventListener("keydown", (e) => {
-    keys.set(e.key, true);
-    if (keybinds.get(e.key)) {
-      for (let i of keybinds.get(e.key)) {
-        i();
-      }
+  // src/vec.ts
+  var Vec2 = class {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
     }
-  });
-  document.addEventListener("keyup", (e) => {
-    keys.set(e.key, false);
-  });
-  function registerKeybind(key, callback) {
-    if (keybinds.get(key)) {
-      keybinds.get(key).push(callback);
-    } else {
-      keybinds.set(key, [callback]);
+    copy() {
+      return new Vec2(this.x, this.y);
     }
+  };
+  function near(a, b, distance) {
+    return a == b || b - a < distance && a - b < distance;
+  }
+  function near2d(a, b, distance) {
+    return near(a.x, b.x, distance) && near(a.y, b.y, distance);
   }
 
-  // grid.ts
+  // src/grid.ts
   function drawGrid(ctx2, posInWorld2, interval, bigInterval) {
     ctx2.strokeStyle = "lightgrey";
     var deadSpaceAtStartY = posInWorld2.y % interval;
@@ -486,7 +481,7 @@
     }
   }
 
-  // part.ts
+  // src/part.ts
   var ellipticalPath = class {
     constructor() {
       this.controlPoints = [[], [], []];
@@ -546,9 +541,36 @@
       ctx2.stroke();
     }
   };
+  var parts = [];
   var Part = class {
-    constructor() {
+    constructor(name) {
       this.paths = [];
+      this._name = "Part";
+      this.recordingDraw = false;
+      this.visible = true;
+      this._name = name ? name : `Part ${parts.length + 1}`;
+      this.listNode = new container(this.name, new button("\u{1F441}").addStyle("margin-left: auto; padding: 0;").addEventListener("click", (self) => {
+        if (this.visible) {
+          self.children[0].content = "\u{1F604}";
+          self.children[0].rerender();
+          this.visible = false;
+        } else {
+          self.children[0].content = "\u{1F441}";
+          self.children[0].rerender();
+          this.visible = true;
+        }
+      })).addClass("item");
+    }
+    get currentPath() {
+      return this.paths[this.paths.length - 1];
+    }
+    get name() {
+      return this._name;
+    }
+    set name(s) {
+      this._name = s;
+      this.listNode.children[0].content = s;
+      this.listNode.children[0].rerender();
     }
     draw(ctx2) {
       ctx2.lineWidth = 3;
@@ -558,16 +580,270 @@
     }
   };
 
-  // main.ts
+  // src/keys.ts
+  var keys = /* @__PURE__ */ new Map([]);
+  var keybinds = /* @__PURE__ */ new Map([]);
+  document.addEventListener("keydown", (e) => {
+    keys.set(e.key, true);
+    if (keybinds.get(e.key)) {
+      for (let i of keybinds.get(e.key)) {
+        i();
+      }
+    }
+  });
+  document.addEventListener("keyup", (e) => {
+    keys.set(e.key, false);
+  });
+  function registerKeybind(key, callback) {
+    if (keybinds.get(key)) {
+      keybinds.get(key).push(callback);
+    } else {
+      keybinds.set(key, [callback]);
+    }
+  }
+
+  // src/styles.ts
+  var buttonStyles = new styleGroup([
+    [".btn", `
+        background-color: white;
+        border: 1px solid rgb(153,153,153);
+        border-radius: 4px; 
+        padding: 0.3em 0.4em;
+        width: 100%;
+        font-weight: bolder;
+    `],
+    [".btn.selected", `
+        background-color: rgb(220,220,220);    
+    `]
+  ], "btn");
+
+  // src/shapes.ts
+  var shapeButtons = {
+    line: new button("line").setAttribute("title", "line (w)").addClass("selected"),
+    circle: new button("circle").setAttribute("title", "circle (e)"),
+    rectangle: new button("rectangle").setAttribute("title", "rectangle (r)")
+  };
+  var shapeGenerators = {
+    line: {
+      handleStartDraw: (controlPoints) => {
+        var p = new linePath();
+        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
+        p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
+        currentPart2.paths.push(p);
+      },
+      handleDraw: (controlPoints) => {
+        var c2 = currentPart2.currentPath;
+        c2.controlPoints[1][0] = viewportToWorld2(mousePos2);
+      }
+    },
+    circle: {
+      centerControlPoints: (self) => {
+        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
+      },
+      handleStartDraw: (controlPoints) => {
+        var p = new ellipticalPath();
+        console.log(controlPoints);
+        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
+        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
+        p.controlPoints[1][0] = p.controlPoints[0][1];
+        p.controlPoints[2][0] = p.controlPoints[0][1];
+        currentPart2.paths.push(p);
+      },
+      handleDraw: (controlPoints) => {
+        var p = currentPart2.currentPath;
+        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
+      }
+    }
+  };
+  registerKeybind("w", () => {
+    selectShape("line");
+  });
+  registerKeybind("e", () => {
+    selectShape("circle");
+  });
+  registerKeybind("r", () => {
+    selectShape("rectangle");
+  });
+  var selectedShape = "";
+  console.log(buttonStyles);
+  for (let i of Object.entries(shapeButtons)) {
+    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
+      selectShape(i[0]);
+    });
+  }
+  function selectShape(shape) {
+    for (let i of Object.values(shapeButtons)) {
+      i.removeClass("selected").applyLastChange();
+    }
+    for (let i of Object.values(toolButtons)) {
+      i.removeClass("selected").applyLastChange();
+    }
+    shapeButtons[shape].addClass("selected").applyLastChange();
+    setSelectedTool("");
+    selectedShape = shape;
+  }
+  function setSelectedShape(shape) {
+    selectedShape = shape;
+  }
+
+  // src/guides.ts
+  var selectedTool2;
+  var freehandSegmentLength = 3;
+  var currentPath;
+  var toolButtons = {
+    free: new button("free").setAttribute("title", "free (g)"),
+    line: new button("line").setAttribute("title", "line (v)"),
+    circle: new button("circle").setAttribute("title", "circle (c)")
+  };
+  registerKeybind("v", () => {
+    selectTool("line");
+  });
+  registerKeybind("c", () => {
+    selectTool("circle");
+  });
+  registerKeybind("g", () => {
+    selectTool("free");
+  });
+  function closestPointOnLine(lineStart, lineEnd) {
+    var mousePosWorld = viewportToWorld2(mousePos2);
+    const lineVector = new Vec2(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
+    const cursorVector = new Vec2(mousePosWorld.x - lineStart.x, mousePosWorld.y - lineStart.y);
+    const dotProduct = lineVector.x * cursorVector.x + lineVector.y * cursorVector.y;
+    const lineMagnitudeSquared = lineVector.x * lineVector.x + lineVector.y * lineVector.y;
+    const t = dotProduct / lineMagnitudeSquared;
+    const clampedT = Math.max(0, Math.min(1, t));
+    return new Vec2(lineStart.x + clampedT * lineVector.x, lineStart.y + clampedT * lineVector.y);
+  }
+  var toolGuides = {
+    free: {
+      controlPoints: [],
+      draw: (c2, d) => {
+      },
+      centerControlPoints: () => {
+      },
+      handleStartDraw: () => {
+        var p = new freePath();
+        p.controlPoints = [[viewportToWorld2(mouseDownPos)]];
+        currentPart2.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: () => {
+        var lastSegment = currentPath.controlPoints[currentPath.controlPoints.length - 1][0];
+        console.log(lastSegment);
+        if (near2d(mousePos2, lastSegment, freehandSegmentLength)) {
+        } else {
+          currentPath.controlPoints.push([viewportToWorld2(mousePos2)]);
+        }
+      }
+    },
+    line: {
+      centerControlPoints: (self) => {
+        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2 - 50, c.htmlNode.height / 2))], [viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 50, c.htmlNode.height / 2))]];
+      },
+      draw: (ctx2, controlPoints) => {
+        ctx2.beginPath();
+        var vCoords = worldToViewport(controlPoints[0][0]);
+        var vCoords1 = worldToViewport(controlPoints[1][0]);
+        ctx2.moveTo(vCoords.x, vCoords.y);
+        ctx2.lineTo(vCoords1.x, vCoords1.y);
+        ctx2.stroke();
+      },
+      handleStartDraw: (controlPoints) => {
+        var p = new linePath();
+        p.controlPoints[0][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
+        p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
+        currentPart2.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: (controlPoints) => {
+        currentPath.controlPoints[1][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
+      }
+    },
+    circle: {
+      centerControlPoints: (self) => {
+        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
+      },
+      draw: (ctx2, controlPoints) => {
+        var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
+        ctx2.beginPath();
+        var vCentreCoords = worldToViewport(controlPoints[0][0]);
+        ctx2.ellipse(vCentreCoords.x, vCentreCoords.y, radius, radius, 0, 0, 360);
+        ctx2.stroke();
+      },
+      handleStartDraw: (controlPoints) => {
+        var p = new ellipticalPath();
+        console.log(controlPoints);
+        p.controlPoints[0] = [controlPoints[0][0], controlPoints[0][1]];
+        p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
+        p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
+        p.controlPoints[2][0] = new Vec2(mousePos2.x, mousePos2.y);
+        currentPart2.paths.push(p);
+        currentPath = p;
+        console.log(currentPath);
+      },
+      handleDraw: (controlPoints) => {
+        var p = currentPath;
+        p.controlPoints[2][0] = new Vec2(mousePos2.x, mousePos2.y);
+      }
+    }
+  };
+  for (let i of Object.entries(toolButtons)) {
+    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
+      selectTool(i[0]);
+    });
+  }
+  function selectTool(tool) {
+    for (let i of Object.values(toolButtons)) {
+      i.removeClass("selected").applyLastChange();
+    }
+    for (let i of Object.values(shapeButtons)) {
+      i.removeClass("selected").applyLastChange();
+    }
+    toolGuides[tool].centerControlPoints(toolGuides[tool]);
+    toolButtons[tool].addClass("selected").applyLastChange();
+    toolGuides[tool].draw(ctx, toolGuides[tool].controlPoints);
+    selectedTool2 = tool;
+    setSelectedShape("");
+  }
+  function setSelectedTool(tool) {
+    selectedTool2 = tool;
+  }
+
+  // src/modes.ts
+  var modeButtons = {
+    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
+    draw: new button("draw").setAttribute("title", "draw (d)"),
+    move: new button("move").setAttribute("title", "move (f)")
+  };
+  registerKeybind("s", () => {
+    selectMode("select");
+  });
+  registerKeybind("d", () => {
+    selectMode("draw");
+  });
+  registerKeybind("f", () => {
+    selectMode("move");
+  });
+  var selectedMode = "select";
+  for (let i of Object.entries(modeButtons)) {
+    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
+      selectMode(i[0]);
+    });
+  }
+  function selectMode(mode) {
+    for (let i of Object.values(modeButtons)) {
+      i.removeClass("selected").applyLastChange();
+    }
+    modeButtons[mode].addClass("selected").applyLastChange();
+    selectedMode = mode;
+  }
+
+  // src/main.ts
   var controlSnapDistance = 10;
   var gridMinorInterval = 20;
   var gridMajorInterval = 100;
-  var Vec2 = class {
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-    }
-  };
   var posInWorld = new Vec2(0, 0);
   var zoomFactor = 1;
   function viewportToWorld2(pos) {
@@ -582,22 +858,6 @@
   var pointerPos = new Vec2(0, 0);
   var mousePos2 = new Vec2(0, 0);
   var mouseDown = false;
-  function near(a, b, distance) {
-    return a == b || b - a < distance && a - b < distance;
-  }
-  function near2d(a, b, distance) {
-    return near(a.x, b.x, distance) && near(a.y, b.y, distance);
-  }
-  function closestPointOnLine(lineStart, lineEnd) {
-    var mousePosWorld = viewportToWorld2(mousePos2);
-    const lineVector = new Vec2(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
-    const cursorVector = new Vec2(mousePosWorld.x - lineStart.x, mousePosWorld.y - lineStart.y);
-    const dotProduct = lineVector.x * cursorVector.x + lineVector.y * cursorVector.y;
-    const lineMagnitudeSquared = lineVector.x * lineVector.x + lineVector.y * lineVector.y;
-    const t = dotProduct / lineMagnitudeSquared;
-    const clampedT = Math.max(0, Math.min(1, t));
-    return new Vec2(lineStart.x + clampedT * lineVector.x, lineStart.y + clampedT * lineVector.y);
-  }
   ctx.strokeStyle = "red";
   var defaultVec2 = new Vec2(0, 0);
   var draggingItems = [];
@@ -636,10 +896,9 @@
   c.addEventListener("pointerdown", () => {
     mouseDownPos = viewportToWorld2(mousePos2);
     if (selectedMode == "draw") {
-      if (selectedTool) {
-        toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints);
+      if (selectedTool2) {
+        toolGuides[selectedTool2].handleStartDraw(toolGuides[selectedTool2].controlPoints);
       } else {
-        console.log(shapeGenerators);
         shapeGenerators[selectedShape].handleStartDraw(shapeGenerators[selectedShape].controlPoints);
       }
     }
@@ -694,19 +953,23 @@
     yCoordReadout.content = `${worldMousePos.y}`;
     yCoordReadout.rerender();
     ctx.lineWidth = 1;
-    if (selectedTool) {
-      var tG = toolGuides[selectedTool];
+    if (selectedTool2) {
+      var tG = toolGuides[selectedTool2];
       tG.draw(ctx, tG.controlPoints);
       if (selectedMode == "select") {
         drawControlPoints(ctx, tG.controlPoints);
       }
     }
     if (selectedMode == "select") {
-      for (let i of currentPart.paths) {
+      for (let i of currentPart2.paths) {
         drawControlPoints(ctx, i.controlPoints);
       }
     }
-    currentPart.draw(ctx);
+    for (let i of parts) {
+      if (i.visible) {
+        i.draw(ctx);
+      }
+    }
     lastMousePos.x = mousePos2.x;
     lastMousePos.y = mousePos2.y;
     requestAnimationFrame(render);
@@ -724,8 +987,8 @@
         yOffset.setValue(String(posInWorld.y)).applyLastChange();
         xOffset.setValue(String(posInWorld.x)).applyLastChange();
       } else if (selectedMode == "draw") {
-        if (selectedTool) {
-          toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints);
+        if (selectedTool2) {
+          toolGuides[selectedTool2].handleDraw(toolGuides[selectedTool2].controlPoints);
         } else {
           shapeGenerators[selectedShape].handleDraw(shapeGenerators[selectedShape].controlPoints);
         }
@@ -744,7 +1007,7 @@
         yOffset.setValue(String(posInWorld.y)).applyLastChange();
         xOffset.setValue(String(posInWorld.x)).applyLastChange();
       } else if (selectedMode == "draw") {
-        toolGuides[selectedTool].handleDraw(toolGuides[selectedTool].controlPoints);
+        toolGuides[selectedTool2].handleDraw(toolGuides[selectedTool2].controlPoints);
       }
     }
   });
@@ -753,224 +1016,8 @@
     c.setAttribute("height", `${c.htmlNode.clientHeight}`);
     c.lightRerender();
   });
-  var buttonStyles = new styleGroup([
-    [".btn", `
-        background-color: white;
-        border: 1px solid rgb(153,153,153);
-        border-radius: 4px; 
-        padding: 0.3em 0.4em;
-        width: 100%;
-        font-weight: bolder;
-    `],
-    [".btn.selected", `
-        background-color: rgb(220,220,220);    
-    `]
-  ], "btn");
-  var modeButtons = {
-    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
-    draw: new button("draw").setAttribute("title", "draw (d)"),
-    move: new button("move").setAttribute("title", "move (f)")
-  };
-  registerKeybind("s", () => {
-    selectMode("select");
-  });
-  registerKeybind("d", () => {
-    selectMode("draw");
-  });
-  registerKeybind("f", () => {
-    selectMode("move");
-  });
-  var selectedMode = "select";
-  for (let i of Object.entries(modeButtons)) {
-    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
-      selectMode(i[0]);
-    });
-  }
-  function selectMode(mode) {
-    for (let i of Object.values(modeButtons)) {
-      i.removeClass("selected").applyLastChange();
-    }
-    modeButtons[mode].addClass("selected").applyLastChange();
-    selectedMode = mode;
-  }
-  var shapeButtons = {
-    line: new button("line").setAttribute("title", "line (w)").addClass("selected"),
-    circle: new button("circle").setAttribute("title", "circle (e)"),
-    rectangle: new button("rectangle").setAttribute("title", "rectangle (r)")
-  };
-  var shapeGenerators = {
-    line: {
-      handleStartDraw: (controlPoints) => {
-        var p = new linePath();
-        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
-        p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
-        currentPart.paths.push(p);
-        currentPath = p;
-        console.log(currentPath);
-      },
-      handleDraw: (controlPoints) => {
-        var c2 = currentPath;
-        c2.controlPoints[1][0] = viewportToWorld2(mousePos2);
-      }
-    },
-    circle: {
-      centerControlPoints: (self) => {
-        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
-      },
-      handleStartDraw: (controlPoints) => {
-        var p = new ellipticalPath();
-        console.log(controlPoints);
-        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
-        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
-        p.controlPoints[1][0] = p.controlPoints[0][1];
-        p.controlPoints[2][0] = p.controlPoints[0][1];
-        currentPart.paths.push(p);
-        currentPath = p;
-        console.log(currentPath);
-      },
-      handleDraw: (controlPoints) => {
-        var p = currentPath;
-        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
-      }
-    }
-  };
-  registerKeybind("w", () => {
-    selectShape("line");
-  });
-  registerKeybind("e", () => {
-    selectShape("circle");
-  });
-  registerKeybind("r", () => {
-    selectShape("rectangle");
-  });
-  var selectedShape = "";
-  for (let i of Object.entries(shapeButtons)) {
-    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
-      selectShape(i[0]);
-    });
-  }
-  function selectShape(shape) {
-    for (let i of Object.values(shapeButtons)) {
-      i.removeClass("selected").applyLastChange();
-    }
-    for (let i of Object.values(toolButtons)) {
-      i.removeClass("selected").applyLastChange();
-    }
-    shapeButtons[shape].addClass("selected").applyLastChange();
-    selectedTool = "";
-    selectedShape = shape;
-  }
-  var toolButtons = {
-    free: new button("free").setAttribute("title", "free (g)"),
-    line: new button("line").setAttribute("title", "line (v)"),
-    circle: new button("circle").setAttribute("title", "circle (c)")
-  };
-  registerKeybind("v", () => {
-    selectTool("line");
-  });
-  registerKeybind("c", () => {
-    selectTool("circle");
-  });
-  registerKeybind("g", () => {
-    selectTool("free");
-  });
-  var currentPart = new Part();
-  var selectedTool;
-  var freehandSegmentLength = 3;
-  var currentPath;
-  var toolGuides = {
-    free: {
-      controlPoints: [],
-      draw: (c2, d) => {
-      },
-      centerControlPoints: () => {
-      },
-      handleStartDraw: () => {
-        var p = new freePath();
-        p.controlPoints = [[viewportToWorld2(mouseDownPos)]];
-        currentPart.paths.push(p);
-        currentPath = p;
-        console.log(currentPath);
-      },
-      handleDraw: () => {
-        var lastSegment = currentPath.controlPoints[currentPath.controlPoints.length - 1][0];
-        console.log(lastSegment);
-        if (near2d(mousePos2, lastSegment, freehandSegmentLength)) {
-        } else {
-          currentPath.controlPoints.push([viewportToWorld2(mousePos2)]);
-        }
-      }
-    },
-    line: {
-      centerControlPoints: (self) => {
-        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2 - 50, c.htmlNode.height / 2))], [viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 50, c.htmlNode.height / 2))]];
-      },
-      draw: (ctx2, controlPoints) => {
-        ctx2.beginPath();
-        var vCoords = worldToViewport(controlPoints[0][0]);
-        var vCoords1 = worldToViewport(controlPoints[1][0]);
-        ctx2.moveTo(vCoords.x, vCoords.y);
-        ctx2.lineTo(vCoords1.x, vCoords1.y);
-        ctx2.stroke();
-      },
-      handleStartDraw: (controlPoints) => {
-        var p = new linePath();
-        p.controlPoints[0][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
-        p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
-        currentPart.paths.push(p);
-        currentPath = p;
-        console.log(currentPath);
-      },
-      handleDraw: (controlPoints) => {
-        currentPath.controlPoints[1][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
-      }
-    },
-    circle: {
-      centerControlPoints: (self) => {
-        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
-      },
-      draw: (ctx2, controlPoints) => {
-        var radius = Math.sqrt(Math.pow(controlPoints[0][0].x - controlPoints[0][1].x, 2) + Math.pow(controlPoints[0][0].y - controlPoints[0][1].y, 2));
-        ctx2.beginPath();
-        var vCentreCoords = worldToViewport(controlPoints[0][0]);
-        ctx2.ellipse(vCentreCoords.x, vCentreCoords.y, radius, radius, 0, 0, 360);
-        ctx2.stroke();
-      },
-      handleStartDraw: (controlPoints) => {
-        var p = new ellipticalPath();
-        console.log(controlPoints);
-        p.controlPoints[0] = [controlPoints[0][0], controlPoints[0][1]];
-        p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
-        p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
-        p.controlPoints[2][0] = new Vec2(mousePos2.x, mousePos2.y);
-        currentPart.paths.push(p);
-        currentPath = p;
-        console.log(currentPath);
-      },
-      handleDraw: (controlPoints) => {
-        var p = currentPath;
-        p.controlPoints[2][0] = new Vec2(mousePos2.x, mousePos2.y);
-      }
-    }
-  };
-  for (let i of Object.entries(toolButtons)) {
-    i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
-      selectTool(i[0]);
-    });
-  }
-  function selectTool(tool) {
-    for (let i of Object.values(toolButtons)) {
-      i.removeClass("selected").applyLastChange();
-    }
-    for (let i of Object.values(shapeButtons)) {
-      i.removeClass("selected").applyLastChange();
-    }
-    toolGuides[tool].centerControlPoints(toolGuides[tool]);
-    toolButtons[tool].addClass("selected").applyLastChange();
-    toolGuides[tool].draw(ctx, toolGuides[tool].controlPoints);
-    selectedTool = tool;
-    selectedShape = "";
-  }
+  var currentPart2 = new Part();
+  parts.push(currentPart2);
   var xCoordReadout = new kleinTextNode("0");
   var yCoordReadout = new kleinTextNode("0");
   var xOffset = new textInput().setValue(String(posInWorld.x)).addEventListener("change", () => {
@@ -987,9 +1034,61 @@
         margin: 0.2em 0;    
     `]
   ], "hr");
-  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+  var partListStyles = new styleGroup([
+    [".part-list-container > .list > .item", `
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px solid black;
+        border-radius: 3px;
+        box-sizing: border-box;
+        background-color: white;
+    `],
+    [".part-list-container > .list > .item.selected", `
+        font-weight: bolder;
+    `],
+    [".part-list-container > .list", `
+        width: 100%;
+        
+        display: flex;
+        gap: 0.1em;
+        flex-direction: column;
+        box-sizing: border-box;
+        
+    `],
+    [".part-list-container > button", `
+        width: 100%;
+        border: 1px solid black;
+        border-radius: 3px;
+        margin: 0.1em 0;
+        box-sizing: border-box;
+        background-color: white;
+
+    `],
+    [".part-list-container", `
+        width: 100%;
+    `]
+  ], "part-list-container");
+  var partList = new container(...parts.map((p) => p.listNode.addEventListener("click", () => {
+    selectPart(p);
+  }))).addClass("list");
+  function selectPart(part) {
+    for (let i of partList.children) {
+      i.removeClass("selected").applyLastChange();
+    }
+    part.listNode.addClass("selected").applyLastChange();
+    currentPart2 = part;
+  }
+  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: crosshair;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }), "Guides", ...Object.values(toolButtons), "Shapes", ...Object.values(shapeButtons), "Modes", ...Object.values(modeButtons)).addStyle("display: flex; padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
+  }), "Guides", ...Object.values(toolButtons), "Shapes", ...Object.values(shapeButtons), "Modes", ...Object.values(modeButtons), new container(partList, new button("+").addEventListener("click", (self) => {
+    var newPart = new Part();
+    parts.push(newPart);
+    partList.addChildren(newPart.listNode.addEventListener("click", () => {
+      selectPart(newPart);
+    }));
+    partList.lightRerender();
+    selectPart(newPart);
+  })).addToStyleGroup(partListStyles)).addStyle("display: flex; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
   renderApp(app, document.getElementById("app"));
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);

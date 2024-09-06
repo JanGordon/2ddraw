@@ -1,5 +1,5 @@
-import { Vec2, viewportToWorld, worldToViewport } from "./main"
-
+import { viewportToWorld, worldToViewport } from "./main"
+import { Vec2 } from "./vec"
 
 export function drawGrid(ctx: CanvasRenderingContext2D, posInWorld: Vec2, interval: number, bigInterval: number) {
     ctx.strokeStyle = "lightgrey"
