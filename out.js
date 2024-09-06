@@ -616,6 +616,20 @@
         background-color: rgb(220,220,220);    
     `]
   ], "btn");
+  var inputStyles = new styleGroup([
+    [".inpt", `
+        background-color: white;
+        border: 1px solid rgb(153,153,153);
+        border-radius: 4px; 
+        padding: 0.3em 0.4em;
+        box-sizing: border-box;
+        width: 100%;
+        font-weight: bolder;
+    `],
+    [".inpt input", `
+        width: calc(100% - 0.8em);
+    `]
+  ], "inpt");
 
   // src/shapes.ts
   var shapeButtons = {
@@ -1079,8 +1093,14 @@
     currentPart2 = part;
   }
   var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: crosshair;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }), "Guides", ...Object.values(toolButtons), "Shapes", ...Object.values(shapeButtons), "Modes", ...Object.values(modeButtons), new container(partList, new button("+").addEventListener("click", (self) => {
+    currentPart2.paths = [];
+  }), "Guides", ...Object.values(toolButtons), "Shapes", ...Object.values(shapeButtons), "Modes", ...Object.values(modeButtons), "Grid", new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+    snapDistance = parseInt(self.htmlNode.value);
+  })).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"), new container("Major:", new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+    gridMajorInterval = parseInt(self.htmlNode.value);
+  })).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"), new container("Minor:", new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+    gridMinorInterval = parseInt(self.htmlNode.value);
+  })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px"), "Parts", new container(partList, new button("+").addEventListener("click", (self) => {
     var newPart = new Part();
     parts.push(newPart);
     partList.addChildren(newPart.listNode.addEventListener("click", () => {
@@ -1088,7 +1108,7 @@
     }));
     partList.lightRerender();
     selectPart(newPart);
-  })).addToStyleGroup(partListStyles)).addStyle("display: flex; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
+  })).addToStyleGroup(partListStyles)).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
   renderApp(app, document.getElementById("app"));
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);

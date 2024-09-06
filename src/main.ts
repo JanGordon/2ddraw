@@ -7,7 +7,7 @@ import { near, near2d, Vec2 } from "./vec"
 import { toolGuides, toolButtons, selectedTool } from "./guides"
 import { modeButtons, selectedMode } from "./modes"
 import { selectedShape, shapeButtons, shapeGenerators } from "./shapes"
-import { buttonStyles } from "./styles"
+import { buttonStyles, inputStyles } from "./styles"
 
 
 const controlSnapDistance = 10
@@ -347,7 +347,7 @@ const app = new container(
 
     new container(
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
-                ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
+                currentPart.paths = []
                 // ctx.stroke()
             }), 
             // new container().addToStyleGroup(hrStyles),
@@ -359,7 +359,26 @@ const app = new container(
             // new container().addToStyleGroup(hrStyles),
             "Modes",
             ...Object.values(modeButtons),
-
+            "Grid",
+            new container(
+                "Snap:",
+                new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                    snapDistance = parseInt(self.htmlNode.value)
+                }),
+            ).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"),
+            new container(
+                "Major:",
+                new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                    gridMajorInterval = parseInt(self.htmlNode.value)
+                }),
+            ).addToStyleGroup(inputStyles).setAttribute("title", "Major grid interval - distance between major grid lines, measured in px"),
+            new container(
+                "Minor:",
+                new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
+                    gridMinorInterval = parseInt(self.htmlNode.value)
+                }),
+            ).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px"),
+            "Parts",
             new container(
                 partList,
                 new button("+").addEventListener("click", (self)=>{
@@ -373,7 +392,7 @@ const app = new container(
                     selectPart(newPart)
                 })
             ).addToStyleGroup(partListStyles)
-    ).addStyle("display: flex; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"),
+    ).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"),
     new container(
         xOffset,
         yOffset
