@@ -1,7 +1,9 @@
-import { button, canvas, container } from "kleinui/elements"
-import { currentPart, mousePos, worldToViewport } from "./main"
+import { button, canvas, container, header1, header2, listItem, textInput, unorderedList } from "kleinui/elements"
+import { currentPart, mousePos, selectPart, worldToViewport } from "./main"
 import { Vec2 } from "./vec"
 import { kleinTextNode, styleGroup } from "kleinui"
+import { collisionGroups } from "./physics"
+import { buttonStyles } from "./styles"
 
 
 export interface Path {
@@ -104,6 +106,21 @@ const visiblityStyles = new styleGroup([
     `]
 ], "vis")
 
+const configStyles = new styleGroup([
+    [".config.visible", `
+        display: flex;
+        flex-direction: column;
+    `],
+    [".config", `
+        display: none;
+        margin: 0.3em;
+        padding: 0.3em;
+        background-color: white;
+        border-radius: 4px;
+        border: 1px solid rgb(153, 153, 153);
+    `]
+], "config")
+
 
 export class Part {
     paths: Path[] = []
@@ -121,11 +138,17 @@ export class Part {
     }
 
     previewCtx: CanvasRenderingContext2D
+    collisionGroupsNode: container
 
     constructor(name?: string) {
         this._name = name ? name : `Part ${parts.length+1}`
         var previewCanvas = new canvas()
         this.previewCtx = previewCanvas.getContext("2d")!
+
+
+        collisionGroups[0].parts.push(this)
+
+
         this.listNode = new container(
             this.name,
             previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"),
@@ -145,7 +168,71 @@ export class Part {
 
         ).addClass("item").addStyle("position: relative;")
 
+        this.collisionGroupsNode = new container(
+            
+        ).addStyle(`
+            display: flex;
+            flex-direction: column;
+        `)
+
+        this.configNode = new container(
+            new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"),
+            new header2("Simulation"),
+            this.collisionGroupsNode
+            
+        ).addToStyleGroup(configStyles)
         
+
+
+    }
+    select() {
+        
+        this.collisionGroupsNode.removeAllChildren()
+        this.collisionGroupsNode.children = collisionGroups.map((g)=>{
+            var getPartList = ()=>g.parts.map((p)=>{
+                if (p == this) {
+                    return new listItem(
+                        p.name + " (This part)",
+                    ).addStyle("font-weight: bold;")
+                } else {
+                    return new listItem(p.name).addEventListener("click", ()=>{console.log("selected");selectPart(p)})
+                }
+            })
+            var CGPartList = new unorderedList(...getPartList())
+            return new container(
+                new header2(g.name),
+                new textInput().setAttribute("type","checkbox").addEventListener("input", (self)=>{
+                    if (self.htmlNode.checked) {
+
+                        // double check this part isn't already in the group
+                        for (let i of g.parts) {
+                            if (i == this) {
+                                return
+                            }
+                        }
+                        g.parts.push(this)
+                        CGPartList.addChildren(new listItem(
+                            this.name + " (This part)",
+                        ).addStyle("font-weight: bold;"))
+                        CGPartList.lightRerender()
+
+                    } else {
+                        for (let i of g.parts) {
+                            if (i == this) {
+                                g.parts.splice(g.parts.indexOf(this))
+                                CGPartList.removeAllChildren()
+                                CGPartList.addChildren(...getPartList())
+                                CGPartList.lightRerender()
+                            }
+                        }
+                    }
+                }),
+                "- enable this part in the collision group",
+                
+                CGPartList
+            )
+        })
+        this.collisionGroupsNode.lightRerender()
     }
     draw(ctx: CanvasRenderingContext2D) {
         ctx.lineWidth = 3
@@ -156,5 +243,6 @@ export class Part {
     recordingDraw = false
     visible = true
     listNode: container
+    configNode: container
 }
 

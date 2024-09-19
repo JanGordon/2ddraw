@@ -410,6 +410,50 @@
       return this.canvas.getContext(contextId, options);
     }
   };
+  var unorderedList = class extends kleinElementNode {
+    constructor() {
+      super(...arguments);
+      this.name = "unordered-list";
+    }
+    render(target) {
+      let element = document.createElement("ul");
+      renderBasics(this, element);
+      target.appendChild(element);
+    }
+  };
+  var listItem = class extends kleinElementNode {
+    constructor() {
+      super(...arguments);
+      this.name = "list-item";
+    }
+    render(target) {
+      let element = document.createElement("li");
+      renderBasics(this, element);
+      target.appendChild(element);
+    }
+  };
+  var header1 = class extends kleinElementNode {
+    constructor() {
+      super(...arguments);
+      this.name = "header1";
+    }
+    render(target) {
+      let element = document.createElement("h1");
+      renderBasics(this, element);
+      target.appendChild(element);
+    }
+  };
+  var header2 = class extends kleinElementNode {
+    constructor() {
+      super(...arguments);
+      this.name = "header2";
+    }
+    render(target) {
+      let element = document.createElement("h2");
+      renderBasics(this, element);
+      target.appendChild(element);
+    }
+  };
   var textInput = class extends kleinElementNode {
     constructor() {
       super(...arguments);
@@ -480,6 +524,18 @@
       ctx2.stroke();
     }
   }
+
+  // src/physics.ts
+  var collisionGroup = class {
+    constructor(name) {
+      this.parts = [];
+      this.name = "New Group";
+      this.name = name;
+    }
+  };
+  var collisionGroups = [
+    new collisionGroup("Main Collision Group")
+  ];
 
   // src/part.ts
   var ellipticalPath = class {
@@ -574,6 +630,20 @@
         translate: 0 50%;
     `]
   ], "vis");
+  var configStyles = new styleGroup([
+    [".config.visible", `
+        display: flex;
+        flex-direction: column;
+    `],
+    [".config", `
+        display: none;
+        margin: 0.3em;
+        padding: 0.3em;
+        background-color: white;
+        border-radius: 4px;
+        border: 1px solid rgb(153, 153, 153);
+    `]
+  ], "config");
   var Part = class {
     constructor(name) {
       this.paths = [];
@@ -583,6 +653,7 @@
       this._name = name ? name : `Part ${parts.length + 1}`;
       var previewCanvas = new canvas();
       this.previewCtx = previewCanvas.getContext("2d");
+      collisionGroups[0].parts.push(this);
       this.listNode = new container(this.name, previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"), new button("\u{1F441}").addToStyleGroup(visiblityStyles).addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;").addEventListener("click", (self) => {
         if (this.visible) {
           self.addClass("hidden").applyLastChange();
@@ -592,6 +663,11 @@
           this.visible = true;
         }
       })).addClass("item").addStyle("position: relative;");
+      this.collisionGroupsNode = new container().addStyle(`
+            display: flex;
+            flex-direction: column;
+        `);
+      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"), new header2("Simulation"), this.collisionGroupsNode).addToStyleGroup(configStyles);
     }
     get currentPath() {
       return this.paths[this.paths.length - 1];
@@ -603,6 +679,44 @@
       this._name = s;
       this.listNode.children[0].content = s;
       this.listNode.children[0].rerender();
+    }
+    select() {
+      this.collisionGroupsNode.removeAllChildren();
+      this.collisionGroupsNode.children = collisionGroups.map((g) => {
+        var getPartList = () => g.parts.map((p) => {
+          if (p == this) {
+            return new listItem(p.name + " (This part)").addStyle("font-weight: bold;");
+          } else {
+            return new listItem(p.name).addEventListener("click", () => {
+              console.log("selected");
+              selectPart(p);
+            });
+          }
+        });
+        var CGPartList = new unorderedList(...getPartList());
+        return new container(new header2(g.name), new textInput().setAttribute("type", "checkbox").addEventListener("input", (self) => {
+          if (self.htmlNode.checked) {
+            for (let i of g.parts) {
+              if (i == this) {
+                return;
+              }
+            }
+            g.parts.push(this);
+            CGPartList.addChildren(new listItem(this.name + " (This part)").addStyle("font-weight: bold;"));
+            CGPartList.lightRerender();
+          } else {
+            for (let i of g.parts) {
+              if (i == this) {
+                g.parts.splice(g.parts.indexOf(this));
+                CGPartList.removeAllChildren();
+                CGPartList.addChildren(...getPartList());
+                CGPartList.lightRerender();
+              }
+            }
+          }
+        }), "- enable this part in the collision group", CGPartList);
+      });
+      this.collisionGroupsNode.lightRerender();
     }
     draw(ctx2) {
       ctx2.lineWidth = 3;
@@ -1163,11 +1277,20 @@
   var partList = new container(...parts.map((p) => p.listNode.addEventListener("click", () => {
     selectPart(p);
   }))).addClass("list");
+  var partConfigs = new container(...parts.map((p) => p.configNode)).addStyle(`
+    position: absolute;
+    right: 0;
+    top: 0;
+`);
   function selectPart(part) {
-    for (let i of partList.children) {
-      i.removeClass("selected").applyLastChange();
+    for (let i of parts) {
+      i.listNode.removeClass("selected").applyLastChange();
+      i.configNode.removeClass("visible").applyLastChange();
     }
+    console.trace("selecting", part.name);
     part.listNode.addClass("selected").applyLastChange();
+    part.configNode.addClass("visible").applyLastChange();
+    part.select();
     currentPart2 = part;
   }
   function menuList(title, items) {
@@ -1194,7 +1317,7 @@
       }
     }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
   }
-  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), partConfigs, new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
     currentPart2.paths = [];
   }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
     new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
@@ -1213,9 +1336,12 @@
       selectPart(newPart);
     }));
     partList.lightRerender();
+    partConfigs.addChildren(newPart.configNode);
+    partConfigs.lightRerender();
     selectPart(newPart);
   })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
   renderApp(app, document.getElementById("app"));
+  selectPart(currentPart2);
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);
   c.lightRerender();

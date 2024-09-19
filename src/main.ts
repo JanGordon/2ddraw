@@ -355,14 +355,28 @@ var partList = new container(
     )
 ).addClass("list")
 
+var partConfigs = new container(
+    ...parts.map((p)=>
+        p.configNode
+    )
+).addStyle(`
+    position: absolute;
+    right: 0;
+    top: 0;
+`)
 
 
 
-function selectPart(part: Part) {
-    for (let i of partList.children) {
-        i.removeClass("selected").applyLastChange()
+
+export function selectPart(part: Part) {
+    for (let i of parts) {
+        i.listNode.removeClass("selected").applyLastChange()
+        i.configNode.removeClass("visible").applyLastChange()
     }
+    console.trace("selecting", part.name)
     part.listNode.addClass("selected").applyLastChange()
+    part.configNode.addClass("visible").applyLastChange()
+    part.select()
     currentPart = part
 }
 
@@ -397,8 +411,9 @@ function menuList(title: string, items: kleinElementNode[]) {
 
 
 const app = new container(
-    new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; top: 0; right: 0;"),
+    new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
+    partConfigs,
 
     new container(
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
@@ -440,8 +455,12 @@ const app = new container(
                         partList.addChildren(
                             newPart.listNode.addEventListener("click", ()=>{selectPart(newPart)})
                         )
-                        
                         partList.lightRerender()
+                        partConfigs.addChildren(
+                            newPart.configNode
+                        )
+                        
+                        partConfigs.lightRerender()
                         selectPart(newPart)
                     })
                 ).addToStyleGroup(partListStyles)]
@@ -457,6 +476,8 @@ const app = new container(
 )
 
 renderApp(app, document.getElementById("app")!)
+selectPart(currentPart)
+
 
 c.setAttribute("width", `${c.htmlNode.clientWidth}`)
 c.setAttribute("height", `${c.htmlNode.clientHeight}`)
