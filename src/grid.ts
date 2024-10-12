@@ -1,4 +1,4 @@
-import { viewportToWorld, worldToViewport } from "./main"
+import { viewportToWorld, worldToViewport, zoomFactor } from "./main"
 import { Vec2 } from "./vec"
 
 export function drawGrid(ctx: CanvasRenderingContext2D, posInWorld: Vec2, interval: number, bigInterval: number) {
@@ -12,9 +12,9 @@ export function drawGrid(ctx: CanvasRenderingContext2D, posInWorld: Vec2, interv
     var startOfGridY = posInWorld.y - deadSpaceAtStartY
 
     
-    for (let y = startOfGridY; y <= startOfGridY + ctx.canvas.height + deadSpaceAtStartY; y+=interval) {
+    for (let y = startOfGridY; y <= startOfGridY + ctx.canvas.height * zoomFactor + deadSpaceAtStartY; y+=interval) {
         var vStart = worldToViewport(new Vec2(posInWorld.x, y))
-        var vEnd = worldToViewport(new Vec2(posInWorld.x + ctx.canvas.width, y))
+        var vEnd = worldToViewport(new Vec2(posInWorld.x + ctx.canvas.width* zoomFactor, y))
         if (y % bigInterval == 0) {
             ctx.lineWidth = 2
         } else {
@@ -30,9 +30,9 @@ export function drawGrid(ctx: CanvasRenderingContext2D, posInWorld: Vec2, interv
     // world pos
     var startOfGridX = posInWorld.x - deadSpaceAtStartX
 
-    for (let x = startOfGridX; x <= startOfGridX + ctx.canvas.width + deadSpaceAtStartX; x+=interval) {
+    for (let x = startOfGridX; x <= startOfGridX + ctx.canvas.width * zoomFactor + deadSpaceAtStartX; x+=interval) {
         var vStart = worldToViewport(new Vec2(x, posInWorld.y))
-        var vEnd = worldToViewport(new Vec2(x, posInWorld.y + ctx.canvas.height))
+        var vEnd = worldToViewport(new Vec2(x, posInWorld.y + ctx.canvas.height* zoomFactor))
         if (x % bigInterval == 0) {
             ctx.lineWidth = 2
         } else {

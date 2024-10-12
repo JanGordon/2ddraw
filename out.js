@@ -368,6 +368,21 @@
     node.addStyle("width: 100%; height: 100%; overflow: hidden;");
     node.width = document.body.clientWidth;
     node.height = document.body.clientHeight;
+    const onResize = () => {
+      resizeElement.style.display = "none";
+      node.width = document.body.clientWidth;
+      node.height = document.body.clientHeight;
+      node.updateDimensions();
+      if (resizeListener) {
+        resizeListener();
+      }
+    };
+    var doit;
+    addEventListener("resize", () => {
+      resizeElement.style.display = "flex";
+      clearTimeout(doit);
+      doit = setTimeout(onResize, 100);
+    });
     node.updateDimensions();
     target.style.overflow = "hidden";
     node.render(target);
@@ -408,17 +423,6 @@
     }
     getContext(contextId, options) {
       return this.canvas.getContext(contextId, options);
-    }
-  };
-  var unorderedList = class extends kleinElementNode {
-    constructor() {
-      super(...arguments);
-      this.name = "unordered-list";
-    }
-    render(target) {
-      let element = document.createElement("ul");
-      renderBasics(this, element);
-      target.appendChild(element);
     }
   };
   var listItem = class extends kleinElementNode {
@@ -495,9 +499,9 @@
     ctx2.strokeStyle = "lightgrey";
     var deadSpaceAtStartY = posInWorld2.y % interval;
     var startOfGridY = posInWorld2.y - deadSpaceAtStartY;
-    for (let y = startOfGridY; y <= startOfGridY + ctx2.canvas.height + deadSpaceAtStartY; y += interval) {
+    for (let y = startOfGridY; y <= startOfGridY + ctx2.canvas.height * zoomFactor + deadSpaceAtStartY; y += interval) {
       var vStart = worldToViewport(new Vec2(posInWorld2.x, y));
-      var vEnd = worldToViewport(new Vec2(posInWorld2.x + ctx2.canvas.width, y));
+      var vEnd = worldToViewport(new Vec2(posInWorld2.x + ctx2.canvas.width * zoomFactor, y));
       if (y % bigInterval == 0) {
         ctx2.lineWidth = 2;
       } else {
@@ -510,9 +514,9 @@
     }
     var deadSpaceAtStartX = posInWorld2.x % interval;
     var startOfGridX = posInWorld2.x - deadSpaceAtStartX;
-    for (let x = startOfGridX; x <= startOfGridX + ctx2.canvas.width + deadSpaceAtStartX; x += interval) {
+    for (let x = startOfGridX; x <= startOfGridX + ctx2.canvas.width * zoomFactor + deadSpaceAtStartX; x += interval) {
       var vStart = worldToViewport(new Vec2(x, posInWorld2.y));
-      var vEnd = worldToViewport(new Vec2(x, posInWorld2.y + ctx2.canvas.height));
+      var vEnd = worldToViewport(new Vec2(x, posInWorld2.y + ctx2.canvas.height * zoomFactor));
       if (x % bigInterval == 0) {
         ctx2.lineWidth = 2;
       } else {
@@ -525,17 +529,29 @@
     }
   }
 
-  // src/physics.ts
-  var collisionGroup = class {
-    constructor(name) {
-      this.parts = [];
-      this.name = "New Group";
-      this.name = name;
+  // src/rigidbody.ts
+  var rigidbody = class {
+    constructor(p) {
+      this.outofdate = false;
+      this.hasGravity = true;
+      this.force = new Vec2(0, 0);
+      this.acceleration = new Vec2(0, 0);
+      this.velocity = new Vec2(0, 0);
+      this.mass = 10;
+      this.physicsPosOffset = new Vec2(0, 0);
+      this.rotation = 0;
+      this.part = p;
+    }
+    calculateCG() {
+      for (let i of this.part.paths) {
+        i;
+      }
+    }
+    generate() {
+      for (let i of this.part.paths) {
+      }
     }
   };
-  var collisionGroups = [
-    new collisionGroup("Main Collision Group")
-  ];
 
   // src/part.ts
   var ellipticalPath = class {
@@ -556,9 +572,9 @@
       return 360;
       return Math.atan((this.controlPoints[2][0].x - this.controlPoints[0][0].x) / (this.controlPoints[2][0].y + this.controlPoints[0][0].y)) * (180 / Math.PI);
     }
-    draw(ctx2) {
+    draw(ctx2, p) {
       ctx2.beginPath();
-      var cViewport = worldToViewport(this.center);
+      var cViewport = p.partToViewport(this.center);
       ctx2.ellipse(cViewport.x, cViewport.y, this.radius, this.radius, 0, this.startAngle, this.endAngle);
       ctx2.stroke();
     }
@@ -567,11 +583,11 @@
     constructor() {
       this.controlPoints = [[]];
     }
-    draw(ctx2) {
+    draw(ctx2, p) {
       ctx2.beginPath();
       for (let s = 1; s < this.controlPoints.length; s++) {
-        var vStart = worldToViewport(this.controlPoints[s - 1][0]);
-        var vEnd = worldToViewport(this.controlPoints[s][0]);
+        var vStart = p.partToViewport(this.controlPoints[s - 1][0]);
+        var vEnd = p.partToViewport(this.controlPoints[s][0]);
         ctx2.moveTo(vStart.x, vStart.y);
         ctx2.lineTo(vEnd.x, vEnd.y);
       }
@@ -588,10 +604,10 @@
     get end() {
       return this.controlPoints[1][0];
     }
-    draw(ctx2) {
+    draw(ctx2, p) {
       ctx2.beginPath();
-      var vStart = worldToViewport(this.start);
-      var vEnd = worldToViewport(this.end);
+      var vStart = p.partToViewport(this.start);
+      var vEnd = p.partToViewport(this.end);
       ctx2.moveTo(vStart.x, vStart.y);
       ctx2.lineTo(vEnd.x, vEnd.y);
       ctx2.stroke();
@@ -601,16 +617,16 @@
     constructor() {
       this.controlPoints = [[]];
     }
-    draw(ctx2) {
+    draw(ctx2, p) {
       ctx2.beginPath();
       for (let i = 2; i < this.controlPoints[0].length; i++) {
-        var vStart = worldToViewport(this.controlPoints[0][i - 1]);
-        var vEnd = worldToViewport(this.controlPoints[0][i]);
+        var vStart = p.partToViewport(this.controlPoints[0][i - 1]);
+        var vEnd = p.partToViewport(this.controlPoints[0][i]);
         ctx2.moveTo(vStart.x, vStart.y);
         ctx2.lineTo(vEnd.x, vEnd.y);
       }
-      var vStart = worldToViewport(this.controlPoints[0][this.controlPoints[0].length - 1]);
-      var vEnd = worldToViewport(this.controlPoints[0][1]);
+      var vStart = p.partToViewport(this.controlPoints[0][this.controlPoints[0].length - 1]);
+      var vEnd = p.partToViewport(this.controlPoints[0][1]);
       ctx2.moveTo(vStart.x, vStart.y);
       ctx2.lineTo(vEnd.x, vEnd.y);
       ctx2.stroke();
@@ -637,15 +653,13 @@
     `],
     [".config", `
         display: none;
-        margin: 0.3em;
-        padding: 0.3em;
-        background-color: white;
-        border-radius: 4px;
-        border: 1px solid rgb(153, 153, 153);
     `]
   ], "config");
   var Part = class {
     constructor(name) {
+      this.pos = viewportToWorld2(new Vec2(0, 0));
+      this.startPos = viewportToWorld2(new Vec2(0, 0));
+      this.rigidbody = new rigidbody(this);
       this.paths = [];
       this._name = "Part";
       this.recordingDraw = false;
@@ -653,7 +667,6 @@
       this._name = name ? name : `Part ${parts.length + 1}`;
       var previewCanvas = new canvas();
       this.previewCtx = previewCanvas.getContext("2d");
-      collisionGroups[0].parts.push(this);
       this.listNode = new container(this.name, previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"), new button("\u{1F441}").addToStyleGroup(visiblityStyles).addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;").addEventListener("click", (self) => {
         if (this.visible) {
           self.addClass("hidden").applyLastChange();
@@ -667,7 +680,10 @@
             display: flex;
             flex-direction: column;
         `);
-      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"), new header2("Simulation"), this.collisionGroupsNode).addToStyleGroup(configStyles);
+      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"), new header2("Simulation"), new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("change", (self) => {
+        this.rigidbody.hasGravity = self.htmlNode.checked;
+        console.log(this.rigidbody.hasGravity);
+      }), "Has Gravity", this.collisionGroupsNode).addToStyleGroup(configStyles);
     }
     get currentPath() {
       return this.paths[this.paths.length - 1];
@@ -680,48 +696,22 @@
       this.listNode.children[0].content = s;
       this.listNode.children[0].rerender();
     }
-    select() {
-      this.collisionGroupsNode.removeAllChildren();
-      this.collisionGroupsNode.children = collisionGroups.map((g) => {
-        var getPartList = () => g.parts.map((p) => {
-          if (p == this) {
-            return new listItem(p.name + " (This part)").addStyle("font-weight: bold;");
-          } else {
-            return new listItem(p.name).addEventListener("click", () => {
-              console.log("selected");
-              selectPart(p);
-            });
-          }
-        });
-        var CGPartList = new unorderedList(...getPartList());
-        return new container(new header2(g.name), new textInput().setAttribute("type", "checkbox").addEventListener("input", (self) => {
-          if (self.htmlNode.checked) {
-            for (let i of g.parts) {
-              if (i == this) {
-                return;
-              }
-            }
-            g.parts.push(this);
-            CGPartList.addChildren(new listItem(this.name + " (This part)").addStyle("font-weight: bold;"));
-            CGPartList.lightRerender();
-          } else {
-            for (let i of g.parts) {
-              if (i == this) {
-                g.parts.splice(g.parts.indexOf(this));
-                CGPartList.removeAllChildren();
-                CGPartList.addChildren(...getPartList());
-                CGPartList.lightRerender();
-              }
-            }
-          }
-        }), "- enable this part in the collision group", CGPartList);
-      });
-      this.collisionGroupsNode.lightRerender();
+    worldToPart(pos) {
+      return new Vec2(pos.x - this.pos.x, pos.y - this.pos.y);
+    }
+    partToWorld(pos) {
+      return new Vec2(pos.x + this.pos.x, pos.y + this.pos.y);
+    }
+    partToViewport(pos) {
+      return worldToViewport(this.partToWorld(pos));
+    }
+    viewportToPart(pos) {
+      return this.worldToPart(viewportToWorld2(pos));
     }
     draw(ctx2) {
       ctx2.lineWidth = 3;
       for (let p of this.paths) {
-        p.draw(ctx2);
+        p.draw(ctx2, this);
       }
     }
   };
@@ -791,37 +781,37 @@
     line: {
       handleStartDraw: (controlPoints) => {
         var p = new linePath();
-        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
+        p.controlPoints[0][0] = currentPart2.viewportToPart(mousePos2);
         p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
         currentPart2.paths.push(p);
       },
       handleDraw: (controlPoints) => {
         var c2 = currentPart2.currentPath;
-        c2.controlPoints[1][0] = viewportToWorld2(mousePos2);
+        c2.controlPoints[1][0] = currentPart2.viewportToPart(mousePos2);
       }
     },
     circle: {
       centerControlPoints: (self) => {
-        self.controlPoints = [[viewportToWorld2(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), viewportToWorld2(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
+        self.controlPoints = [[currentPart2.viewportToPart(new Vec2(c.htmlNode.width / 2, c.htmlNode.height / 2)), currentPart2.viewportToPart(new Vec2(c.htmlNode.width / 2 + 100, c.htmlNode.height / 2))]];
       },
       handleStartDraw: (controlPoints) => {
         var p = new ellipticalPath();
         console.log(controlPoints);
-        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
-        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
+        p.controlPoints[0][0] = currentPart2.viewportToPart(mousePos2);
+        p.controlPoints[0][1] = currentPart2.viewportToPart(mousePos2);
         p.controlPoints[1][0] = p.controlPoints[0][1];
         p.controlPoints[2][0] = p.controlPoints[0][1];
         currentPart2.paths.push(p);
       },
       handleDraw: (controlPoints) => {
         var p = currentPart2.currentPath;
-        p.controlPoints[0][1] = viewportToWorld2(mousePos2);
+        p.controlPoints[0][1] = currentPart2.viewportToPart(mousePos2);
       }
     },
     ngon: {
       handleStartDraw: (controlPoints) => {
         var p = new ngonPath();
-        p.controlPoints[0][0] = viewportToWorld2(mousePos2);
+        p.controlPoints[0][0] = currentPart2.viewportToPart(mousePos2);
         console.log(`center: X:${p.controlPoints[0][0].x} Y:${p.controlPoints[0][0].y}`);
         var radius = 20;
         for (let i = 0; i < ngonSides; i++) {
@@ -834,7 +824,7 @@
       },
       handleDraw: (controlPoints) => {
         var c2 = currentPart2.currentPath;
-        c2.controlPoints[0][1] = viewportToWorld2(mousePos2);
+        c2.controlPoints[0][1] = currentPart2.viewportToPart(mousePos2);
         var radius = Math.sqrt(Math.pow(c2.controlPoints[0][0].x - c2.controlPoints[0][1].x, 2) + Math.pow(c2.controlPoints[0][0].y - c2.controlPoints[0][1].y, 2));
         console.log(radius);
         for (let i = 0; i < ngonSides; i++) {
@@ -914,7 +904,7 @@
       },
       handleStartDraw: () => {
         var p = new freePath();
-        p.controlPoints = [[viewportToWorld2(mouseDownPos)]];
+        p.controlPoints = [[viewportToWorld2(mousePos2)]];
         currentPart2.paths.push(p);
         currentPath = p;
         console.log(currentPath);
@@ -1031,6 +1021,209 @@
     selectedMode = mode;
   }
 
+  // src/simulate.ts
+  var scaleFactor = 10;
+  var simulationSpeed = 25;
+  function simulate(cg) {
+    for (let i of cg.parts) {
+      i.rigidbody.generate();
+      if (i.rigidbody.hasGravity) {
+        i.rigidbody.force = new Vec2(0, i.rigidbody.mass * 10);
+      } else {
+        i.rigidbody.force = new Vec2(0, 0);
+      }
+      i.rigidbody.velocity = new Vec2(0, 0);
+    }
+    timing(simulationSpeed, (dt) => {
+      var ds = dt / 1e3;
+      for (let i of cg.parts) {
+        i.rigidbody.acceleration = new Vec2(i.rigidbody.force.x / i.rigidbody.mass, i.rigidbody.force.y / i.rigidbody.mass);
+        i.rigidbody.velocity.x += i.rigidbody.acceleration.x * ds;
+        i.rigidbody.velocity.y += i.rigidbody.acceleration.y * ds;
+        i.pos.x += i.rigidbody.velocity.x * ds * scaleFactor;
+        i.pos.y += i.rigidbody.velocity.y * ds * scaleFactor;
+        console.log(i.pos, ds, i.rigidbody.velocity, i.rigidbody.acceleration, i.rigidbody.force);
+      }
+    });
+  }
+  function stopSimulation(cg) {
+    shouldPause = true;
+    for (let i of cg.parts) {
+      i.pos.x = i.startPos.x;
+      i.pos.y = i.startPos.y;
+    }
+  }
+  var shouldPause = false;
+  function timing(frequency, simFn) {
+    var beginTime = 0;
+    var currentTime = 0;
+    shouldPause = false;
+    if (this.isEnded) {
+      startTime = 0;
+    }
+    var frameIndex = beginTime * frequency;
+    var isPlaying = true;
+    var isEnded = false;
+    let renderFrame;
+    var startTime = Date.now();
+    var realTime = 0;
+    renderFrame = (frame) => {
+      var roundedFrameIndex = Math.round(frameIndex);
+      if (shouldPause) {
+        console.log("paused");
+        this.shouldPause = false;
+        this.isPlaying = false;
+      } else {
+        let targetTime = frameIndex / frequency * 1e3;
+        let dTime = Date.now() - startTime + beginTime * 1e3 - realTime;
+        simFn(dTime);
+        realTime = Date.now() - startTime + beginTime * 1e3;
+        currentTime = (realTime + startTime * 1e3) / 1e3;
+        if (realTime < targetTime) {
+          setTimeout(() => {
+            frameIndex = roundedFrameIndex + 1;
+            renderFrame(frameIndex);
+          }, targetTime - realTime);
+        } else {
+          frameIndex += (realTime - targetTime) / frequency;
+          renderFrame(frameIndex);
+        }
+      }
+    };
+    renderFrame(0);
+  }
+
+  // src/physics.ts
+  var collisionGroup = class {
+    constructor(name) {
+      this.parts = [];
+      this.name = "New Group";
+      this.collide = true;
+      this.name = name;
+    }
+    addPart(p) {
+      this.parts.push(p);
+    }
+    removePart(p) {
+      this.parts.splice(this.parts.indexOf(p));
+    }
+    rerender() {
+      this.listener();
+    }
+    simulate() {
+      simulate(this);
+    }
+  };
+  var collisionGroups = [
+    new collisionGroup("Main Collision Group")
+  ];
+  function cgListItem(title, items) {
+    const dropIcon = new kleinTextNode("\u02C5");
+    return new container(new button(title, new container(dropIcon).addStyle("margin-left: auto;")).addEventListener("click", (self) => {
+      if (self.hasClass("hidden")) {
+        for (let i of self.parent.children) {
+          if (i != self) {
+            i.addStyle("display: block;").applyLastChange();
+          }
+        }
+        self.removeClass("hidden").applyLastChange();
+        dropIcon.content = "\u02C5";
+        dropIcon.rerender();
+      } else {
+        for (let i of self.parent.children) {
+          if (i != self) {
+            i.addStyle("display: none;").applyLastChange();
+          }
+        }
+        self.addClass("hidden").applyLastChange();
+        dropIcon.content = "\u02C4";
+        dropIcon.rerender();
+      }
+    }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
+  }
+  var CGStyles = new styleGroup([
+    ["li.this-part::after", `
+        content: " (This part)";
+
+    `],
+    ["li.this-part", `
+        font-weight: bold;
+
+    `],
+    ["li", `
+        list-style-type: "";
+    `],
+    [".cg", `
+        margin-left: 3px;
+    `]
+  ], "cg");
+  function getCollisionGroupNode(group) {
+    const pList = new container().addToStyleGroup(CGStyles);
+    var rF = () => {
+      pList.removeAllChildren();
+      pList.addChildren(new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("input", (self) => {
+        group.collide = self.htmlNode.checked;
+      }));
+      for (let i of parts) {
+        var input = new textInput().setAttribute("type", "checkbox").setAttribute(group.parts.includes(i) ? "checked" : "placeholder", "").addEventListener("input", () => {
+          if (input.htmlNode.checked) {
+            for (let p of group.parts) {
+              if (i == p) {
+                return;
+              }
+            }
+            group.addPart(i);
+          } else {
+            group.removePart(i);
+          }
+        });
+        if (i == currentPart2) {
+          pList.addChildren(new listItem(input, i.name).addClass("this-part"));
+        } else {
+          pList.addChildren(new listItem(input, i.name));
+        }
+      }
+      console.log("rendered", group.parts, group);
+      if (pList.htmlNode) {
+        pList.lightRerender();
+      }
+    };
+    group.listener = rF;
+    rF();
+    return cgListItem(new textInput().addEventListener("change", (self) => {
+      group.name = self.htmlNode.value;
+    }).addEventListener("click", (self, e) => {
+      e.stopImmediatePropagation();
+    }).setAttribute("value", group.name).addStyle("text-overflow: ellipsis; width: min-content; white-space: nowrap; overflow: hidden; border: none; background-color: transparent;"), [pList]);
+  }
+  var collisionGroupsNodeContainer = new container(...collisionGroups.map((g) => getCollisionGroupNode(g))).addStyle("margin: 3px;");
+  var simulating = false;
+  var physicsConfig = menuList("Physics", [
+    collisionGroupsNodeContainer,
+    new button("+").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+      collisionGroups.push(new collisionGroup("Group " + (collisionGroups.length + 1)));
+      collisionGroupsNodeContainer.addChildren(getCollisionGroupNode(collisionGroups[collisionGroups.length - 1]));
+      collisionGroupsNodeContainer.lightRerender();
+    }),
+    new button("Simulate").addToStyleGroup(buttonStyles).addEventListener("click", (self) => {
+      if (simulating == false) {
+        for (let i of collisionGroups) {
+          i.simulate();
+          self.children[0].content = "Stop Simulation";
+          simulating = true;
+          self.children[0].rerender();
+        }
+      } else {
+        for (let i of collisionGroups) {
+          stopSimulation(i);
+          self.children[0].content = "Simulate";
+          simulating = false;
+          self.children[0].rerender();
+        }
+      }
+    })
+  ]);
+
   // src/main.ts
   var controlSnapDistance = 10;
   var gridMinorInterval = 20;
@@ -1049,6 +1242,15 @@
   var pointerPos = new Vec2(0, 0);
   var mousePos2 = new Vec2(0, 0);
   var mouseDown = false;
+  c.addEventListener("wheel", (self, e) => {
+    e.preventDefault();
+    var befPos = viewportToWorld2(pointerPos);
+    zoomFactor -= e.wheelDelta / 480;
+    var aftPos = viewportToWorld2(pointerPos);
+    posInWorld.x += befPos.x - aftPos.x;
+    posInWorld.y += befPos.y - aftPos.y;
+    console.log(e.wheelDelta / 120);
+  });
   ctx.strokeStyle = "red";
   var defaultVec2 = new Vec2(0, 0);
   var draggingItems = [];
@@ -1085,9 +1287,11 @@
       }
     }
   }
-  var mouseDownPos = new Vec2(0, 0);
+  var mouseDownPos2 = new Vec2(0, 0);
+  var mouseDownPosV = new Vec2(0, 0);
   c.addEventListener("pointerdown", () => {
-    mouseDownPos = viewportToWorld2(mousePos2);
+    mouseDownPos2 = viewportToWorld2(mousePos2);
+    mouseDownPosV = mousePos2;
     if (selectedMode == "draw") {
       if (selectedTool2) {
         toolGuides[selectedTool2].handleStartDraw(toolGuides[selectedTool2].controlPoints);
@@ -1185,9 +1389,9 @@
     pointerPos.y = ev.clientY;
     if (mouseDown) {
       if (selectedMode == "move") {
-        posInWorld.x = mouseDownPos.x - mousePos2.x;
-        posInWorld.y = mouseDownPos.y - mousePos2.y;
-        console.log(mouseDownPos, mousePos2, posInWorld);
+        posInWorld.x = mouseDownPos2.x - zoomFactor * pointerPos.x;
+        posInWorld.y = mouseDownPos2.y - zoomFactor * pointerPos.y;
+        console.log(mouseDownPos2, viewportToWorld2(mousePos2), pointerPos, posInWorld);
         yOffset.setValue(String(posInWorld.y)).applyLastChange();
         xOffset.setValue(String(posInWorld.x)).applyLastChange();
       } else if (selectedMode == "draw") {
@@ -1205,9 +1409,9 @@
     pointerPos.y = ev.touches[0].clientY;
     if (mouseDown) {
       if (selectedMode == "move") {
-        posInWorld.x = mouseDownPos.x - mousePos2.x;
-        posInWorld.y = mouseDownPos.y - mousePos2.y;
-        console.log(mouseDownPos, mousePos2, posInWorld);
+        posInWorld.x = mouseDownPos2.x - mousePos2.x;
+        posInWorld.y = mouseDownPos2.y - mousePos2.y;
+        console.log(mouseDownPos2, mousePos2, posInWorld);
         yOffset.setValue(String(posInWorld.y)).applyLastChange();
         xOffset.setValue(String(posInWorld.x)).applyLastChange();
       } else if (selectedMode == "draw") {
@@ -1222,6 +1426,7 @@
   });
   var currentPart2 = new Part();
   parts.push(currentPart2);
+  collisionGroups[0].addPart(currentPart2);
   var xCoordReadout = new kleinTextNode("0");
   var yCoordReadout = new kleinTextNode("0");
   var xOffset = new textInput().setValue(String(posInWorld.x)).addEventListener("change", () => {
@@ -1275,14 +1480,10 @@
     `]
   ], "part-list-container");
   var partList = new container(...parts.map((p) => p.listNode.addEventListener("click", () => {
-    selectPart(p);
+    selectPart3(p);
   }))).addClass("list");
-  var partConfigs = new container(...parts.map((p) => p.configNode)).addStyle(`
-    position: absolute;
-    right: 0;
-    top: 0;
-`);
-  function selectPart(part) {
+  var partConfigs = menuList("Part", parts.map((p) => p.configNode)).addStyle("width: 100%;");
+  function selectPart3(part) {
     for (let i of parts) {
       i.listNode.removeClass("selected").applyLastChange();
       i.configNode.removeClass("visible").applyLastChange();
@@ -1290,8 +1491,10 @@
     console.trace("selecting", part.name);
     part.listNode.addClass("selected").applyLastChange();
     part.configNode.addClass("visible").applyLastChange();
-    part.select();
     currentPart2 = part;
+    for (let i of collisionGroups) {
+      i.listener();
+    }
   }
   function menuList(title, items) {
     const dropIcon = new kleinTextNode("\u02C5");
@@ -1317,8 +1520,17 @@
       }
     }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
   }
-  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), partConfigs, new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
-    currentPart2.paths = [];
+  var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), new container(partConfigs, physicsConfig).addStyle(`
+        position: absolute;
+        right: 0;
+        top: 0;
+        margin: 0.3em;
+        width: 13em;
+        overflow: hidden;
+    `), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+    if (confirm("Are you sure you want to clear this part's paths?")) {
+      currentPart2.paths = [];
+    }
   }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
     new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
       snapDistance = parseInt(self.htmlNode.value);
@@ -1333,15 +1545,16 @@
     var newPart = new Part();
     parts.push(newPart);
     partList.addChildren(newPart.listNode.addEventListener("click", () => {
-      selectPart(newPart);
+      selectPart3(newPart);
     }));
     partList.lightRerender();
     partConfigs.addChildren(newPart.configNode);
     partConfigs.lightRerender();
-    selectPart(newPart);
+    collisionGroups[0].addPart(newPart);
+    selectPart3(newPart);
   })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
   renderApp(app, document.getElementById("app"));
-  selectPart(currentPart2);
+  selectPart3(currentPart2);
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);
   c.lightRerender();

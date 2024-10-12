@@ -1,6 +1,6 @@
 import { button } from "kleinui/elements";
 import { registerKeybind } from "./keys";
-import { viewportToWorld, currentPart, mousePos, worldToViewport, mouseDownPos, c, ctx } from "./main";
+import { viewportToWorld, currentPart, mousePos, worldToViewport, mouseDownPos, c, ctx, zoomFactor } from "./main";
 import { buttonStyles } from "./styles"
 import { Path, freePath, linePath, ellipticalPath } from "./part";
 import { near2d, Vec2 } from "./vec";
@@ -69,7 +69,7 @@ export const toolGuides = {
         centerControlPoints: ()=>{},
         handleStartDraw: ()=>{
             var p = new freePath()
-            p.controlPoints = [[viewportToWorld(mouseDownPos)]]
+            p.controlPoints = [[viewportToWorld(mousePos)]]
             currentPart.paths.push(p)
             currentPath = p
             console.log(currentPath)

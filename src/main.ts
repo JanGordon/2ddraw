@@ -8,6 +8,7 @@ import { toolGuides, toolButtons, selectedTool } from "./guides"
 import { modeButtons, selectedMode } from "./modes"
 import { selectedShape, shapeButtons, shapeGenerators } from "./shapes"
 import { buttonStyles, inputStyles } from "./styles"
+import { collisionGroup, collisionGroups, physicsConfig } from "./physics"
 
 
 const controlSnapDistance = 10
@@ -18,7 +19,9 @@ var gridMajorInterval = 100
 
 
 var posInWorld = new Vec2(0,0)
-var zoomFactor = 1
+export var zoomFactor = 1
+
+
 
 export function viewportToWorld(pos: Vec2) {
     return new Vec2(
@@ -45,7 +48,19 @@ export var pointerPos = new Vec2(0,0) // specifically position of pointer ignori
 export var mousePos = new Vec2(0,0) // mouse position including snapping
 export var mouseDown = false
 
+c.addEventListener("wheel", (self, e)=>{
+    e.preventDefault()
+    // world posiiton of mouse before zoom
+    var befPos = viewportToWorld(pointerPos)
+    zoomFactor -= e.wheelDelta/480
+    // world position of mouse after zoom
+    var aftPos = viewportToWorld(pointerPos)
 
+    // move world by that differnce
+    posInWorld.x += befPos.x - aftPos.x
+    posInWorld.y += befPos.y - aftPos.y
+    console.log(e.wheelDelta/120)
+})
 
 
 
@@ -97,9 +112,11 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
     }
 }
 
-export var mouseDownPos = new Vec2(0,0)
+export var mouseDownPos = new Vec2(0,0)  // in world position
+export var mouseDownPosV = new Vec2(0,0)  // in Viewport position
 c.addEventListener("pointerdown", ()=>{
     mouseDownPos = viewportToWorld(mousePos)
+    mouseDownPosV = mousePos
     if (selectedMode == "draw") {
         if (selectedTool) {
             toolGuides[selectedTool].handleStartDraw(toolGuides[selectedTool].controlPoints)
@@ -235,9 +252,10 @@ c.addEventListener("mousemove", (self, e) => {
     pointerPos.y = ev.clientY
     if (mouseDown) {
         if (selectedMode == "move") {
-            posInWorld.x = mouseDownPos.x - mousePos.x
-            posInWorld.y = mouseDownPos.y - mousePos.y
-            console.log(mouseDownPos, mousePos, posInWorld)
+            
+            posInWorld.x = (mouseDownPos.x - zoomFactor * pointerPos.x)
+            posInWorld.y = (mouseDownPos.y - zoomFactor * pointerPos.y)
+            console.log(mouseDownPos, viewportToWorld(mousePos), pointerPos, posInWorld)
             yOffset.setValue(String(posInWorld.y)).applyLastChange()
             xOffset.setValue(String(posInWorld.x)).applyLastChange()
         
@@ -284,6 +302,7 @@ const resizeObserver = new ResizeObserver(()=>{
 
 export var currentPart = new Part()
 parts.push(currentPart)
+collisionGroups[0].addPart(currentPart)
 
 
 
@@ -355,15 +374,12 @@ var partList = new container(
     )
 ).addClass("list")
 
-var partConfigs = new container(
-    ...parts.map((p)=>
+var partConfigs = menuList(
+    "Part",
+    parts.map((p)=>
         p.configNode
     )
-).addStyle(`
-    position: absolute;
-    right: 0;
-    top: 0;
-`)
+).addStyle("width: 100%;")
 
 
 
@@ -376,11 +392,14 @@ export function selectPart(part: Part) {
     console.trace("selecting", part.name)
     part.listNode.addClass("selected").applyLastChange()
     part.configNode.addClass("visible").applyLastChange()
-    part.select()
+    
     currentPart = part
+    for (let i of collisionGroups) {
+        i.listener() // rerenders collision group lists
+    }
 }
 
-function menuList(title: string, items: kleinElementNode[]) {
+export function menuList(title: string, items: kleinElementNode[]) {
     const dropIcon = new kleinTextNode("˅")
     return new container(
         new button(title,new container(dropIcon).addStyle("margin-left: auto;")).addEventListener("click", (self) => {
@@ -413,11 +432,24 @@ function menuList(title: string, items: kleinElementNode[]) {
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
-    partConfigs,
-
+    new container(
+        partConfigs,
+        physicsConfig,
+    ).addStyle(`
+        position: absolute;
+        right: 0;
+        top: 0;
+        margin: 0.3em;
+        width: 13em;
+        overflow: hidden;
+    `),
+    
     new container(
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
-                currentPart.paths = []
+                if (confirm("Are you sure you want to clear this part's paths?")) {
+                    currentPart.paths = []
+
+                }
                 // ctx.stroke()
             }), 
             // new container().addToStyleGroup(hrStyles),
@@ -461,6 +493,8 @@ const app = new container(
                         )
                         
                         partConfigs.lightRerender()
+                        collisionGroups[0].addPart(newPart)
+
                         selectPart(newPart)
                     })
                 ).addToStyleGroup(partListStyles)]
