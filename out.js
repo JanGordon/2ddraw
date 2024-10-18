@@ -494,18 +494,88 @@
     return near(a.x, b.x, distance) && near(a.y, b.y, distance);
   }
 
+  // src/theme.ts
+  var dynamicStyles = /* @__PURE__ */ new Map([]);
+  function dynamicStyleGroup(styles, className) {
+    var sT = new styleGroup(styles(), className);
+    dynamicStyles.set(className, [sT, styles]);
+    return sT;
+  }
+  function updateDynamicStyleGroup(styleName) {
+    var sT = dynamicStyles.get(styleName);
+    if (sT?.length == 2) {
+      sT[0].styles = sT[1]();
+      document.head.querySelector("#" + sT[0].className).innerHTML = sT[0].getCss();
+    } else {
+      console.error("no style group named", styleName);
+    }
+  }
+
+  // src/preferences.ts
+  var lightTheme = {
+    gridTheme: {
+      minorColor: "lightgrey",
+      majorColor: "lightgrey",
+      minorWidth: 0.4,
+      majorWidth: 2,
+      bgColor: "white"
+    },
+    buttonTheme: {
+      borderRadius: 4,
+      borderColor: "rgb(153,153,153)",
+      fontSize: 1,
+      bgColor: "white",
+      textColor: "black",
+      fgColor: "black",
+      selectedBgColor: "rgb(220, 220, 220)"
+    },
+    textTheme: {
+      textColor: "black"
+    }
+  };
+  var darkTheme = {
+    gridTheme: {
+      minorColor: "rgb(10,10,10)",
+      majorColor: "rgb(25,25,25)",
+      minorWidth: 0.2,
+      majorWidth: 2,
+      bgColor: "rgb(36,36,36)"
+    },
+    buttonTheme: {
+      borderRadius: 4,
+      borderColor: "rgb(153,153,153)",
+      fontSize: 1,
+      bgColor: "rgb(36,36,36)",
+      textColor: "white",
+      fgColor: "white",
+      selectedBgColor: "rgb(63,63,63)"
+    },
+    textTheme: {
+      textColor: "white"
+    }
+  };
+  function setTheme(t) {
+    theme = t;
+    updateDynamicStyleGroup("btn");
+    updateDynamicStyleGroup("inpt");
+    updateDynamicStyleGroup("general");
+  }
+  var theme = lightTheme;
+  console.log(theme);
+
   // src/grid.ts
   function drawGrid(ctx2, posInWorld2, interval, bigInterval) {
-    ctx2.strokeStyle = "lightgrey";
     var deadSpaceAtStartY = posInWorld2.y % interval;
     var startOfGridY = posInWorld2.y - deadSpaceAtStartY;
     for (let y = startOfGridY; y <= startOfGridY + ctx2.canvas.height * zoomFactor + deadSpaceAtStartY; y += interval) {
       var vStart = worldToViewport(new Vec2(posInWorld2.x, y));
       var vEnd = worldToViewport(new Vec2(posInWorld2.x + ctx2.canvas.width * zoomFactor, y));
       if (y % bigInterval == 0) {
-        ctx2.lineWidth = 2;
+        ctx2.lineWidth = theme.gridTheme.majorWidth;
+        ctx2.strokeStyle = theme.gridTheme.majorColor;
       } else {
-        ctx2.lineWidth = 0.4;
+        ctx2.lineWidth = theme.gridTheme.minorWidth;
+        ctx2.strokeStyle = theme.gridTheme.minorColor;
       }
       ctx2.beginPath();
       ctx2.moveTo(vStart.x, vStart.y);
@@ -518,9 +588,11 @@
       var vStart = worldToViewport(new Vec2(x, posInWorld2.y));
       var vEnd = worldToViewport(new Vec2(x, posInWorld2.y + ctx2.canvas.height * zoomFactor));
       if (x % bigInterval == 0) {
-        ctx2.lineWidth = 2;
+        ctx2.lineWidth = theme.gridTheme.majorWidth;
+        ctx2.strokeStyle = theme.gridTheme.majorColor;
       } else {
-        ctx2.lineWidth = 0.4;
+        ctx2.lineWidth = theme.gridTheme.minorWidth;
+        ctx2.strokeStyle = theme.gridTheme.minorColor;
       }
       ctx2.beginPath();
       ctx2.moveTo(vStart.x, vStart.y);
@@ -556,6 +628,7 @@
   // src/part.ts
   var ellipticalPath = class {
     constructor() {
+      this.name = "ellipse";
       this.controlPoints = [[], [], []];
     }
     get center() {
@@ -581,6 +654,7 @@
   };
   var freePath = class {
     constructor() {
+      this.name = "free";
       this.controlPoints = [[]];
     }
     draw(ctx2, p) {
@@ -596,6 +670,7 @@
   };
   var linePath = class {
     constructor() {
+      this.name = "line";
       this.controlPoints = [[], []];
     }
     get start() {
@@ -615,6 +690,7 @@
   };
   var ngonPath = class {
     constructor() {
+      this.name = "ngon";
       this.controlPoints = [[]];
     }
     draw(ctx2, p) {
@@ -662,12 +738,13 @@
       this.rigidbody = new rigidbody(this);
       this.paths = [];
       this._name = "Part";
+      this.pathListNode = new container();
       this.recordingDraw = false;
       this.visible = true;
       this._name = name ? name : `Part ${parts.length + 1}`;
       var previewCanvas = new canvas();
       this.previewCtx = previewCanvas.getContext("2d");
-      this.listNode = new container(this.name, previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"), new button("\u{1F441}").addToStyleGroup(visiblityStyles).addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;").addEventListener("click", (self) => {
+      this.listNode = new container(this.name, previewCanvas.addStyle(`position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;`), new button("\u{1F441}").addToStyleGroup(visiblityStyles).addStyle("margin-left: auto; background-color: transparent; height: min-content; padding: 0; position: relative; border: none; padding: 0;").addEventListener("click", (self) => {
         if (this.visible) {
           self.addClass("hidden").applyLastChange();
           this.visible = false;
@@ -680,10 +757,10 @@
             display: flex;
             flex-direction: column;
         `);
-      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"), new header2("Simulation"), new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("change", (self) => {
+      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; margin-right: 4px; font-size: 1em;"), new header2("Paths"), this.pathListNode, new container("Has Gravity", new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("change", (self) => {
         this.rigidbody.hasGravity = self.htmlNode.checked;
         console.log(this.rigidbody.hasGravity);
-      }), "Has Gravity", this.collisionGroupsNode).addToStyleGroup(configStyles);
+      }))).addToStyleGroup(configStyles);
     }
     get currentPath() {
       return this.paths[this.paths.length - 1];
@@ -695,6 +772,14 @@
       this._name = s;
       this.listNode.children[0].content = s;
       this.listNode.children[0].rerender();
+    }
+    addPath(p) {
+      this.paths.push(p);
+      this.pathListNode.removeAllChildren();
+      this.pathListNode.addChildren(...this.paths.map((p2) => {
+        return new button(p2.name);
+      }));
+      this.pathListNode.parent.lightRerender();
     }
     worldToPart(pos) {
       return new Vec2(pos.x - this.pos.x, pos.y - this.pos.y);
@@ -739,31 +824,35 @@
   }
 
   // src/styles.ts
-  var buttonStyles = new styleGroup([
+  var buttonStyles = dynamicStyleGroup(() => [
     [".btn", `
-        background-color: white;
-        border: 1px solid rgb(153,153,153);
-        border-radius: 4px; 
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
         padding: 0.3em 0.4em;
+        color: ${theme.buttonTheme.textColor};
         width: 100%;
         font-weight: bolder;
     `],
     [".btn.selected", `
-        background-color: rgb(220,220,220);    
+        background-color: ${theme.buttonTheme.selectedBgColor};    
     `]
   ], "btn");
-  var inputStyles = new styleGroup([
+  var inputStyles = dynamicStyleGroup(() => [
     [".inpt", `
-        background-color: white;
-        border: 1px solid rgb(153,153,153);
-        border-radius: 4px; 
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
         padding: 0.3em 0.4em;
-        box-sizing: border-box;
-        width: 100%;
+        color: ${theme.buttonTheme.textColor};
+        width: calc(100% - 0.8em);
         font-weight: bolder;
     `],
     [".inpt input", `
         width: calc(100% - 0.8em);
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        background-color: ${theme.buttonTheme.bgColor};
+        color: ${theme.buttonTheme.textColor};
     `]
   ], "inpt");
 
@@ -783,7 +872,7 @@
         var p = new linePath();
         p.controlPoints[0][0] = currentPart2.viewportToPart(mousePos2);
         p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
       },
       handleDraw: (controlPoints) => {
         var c2 = currentPart2.currentPath;
@@ -801,7 +890,7 @@
         p.controlPoints[0][1] = currentPart2.viewportToPart(mousePos2);
         p.controlPoints[1][0] = p.controlPoints[0][1];
         p.controlPoints[2][0] = p.controlPoints[0][1];
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
       },
       handleDraw: (controlPoints) => {
         var p = currentPart2.currentPath;
@@ -820,7 +909,7 @@
           p.controlPoints[0][i + 1].x = Math.sin(a * (Math.PI / 180)) * radius + p.controlPoints[0][0].x;
           p.controlPoints[0][i + 1].y = Math.cos(a * (Math.PI / 180)) * radius + p.controlPoints[0][0].y;
         }
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
       },
       handleDraw: (controlPoints) => {
         var c2 = currentPart2.currentPath;
@@ -905,7 +994,7 @@
       handleStartDraw: () => {
         var p = new freePath();
         p.controlPoints = [[viewportToWorld2(mousePos2)]];
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
         currentPath = p;
         console.log(currentPath);
       },
@@ -934,7 +1023,7 @@
         var p = new linePath();
         p.controlPoints[0][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0]);
         p.controlPoints[1][0] = new Vec2(p.start.x, p.start.y);
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
         currentPath = p;
         console.log(currentPath);
       },
@@ -960,7 +1049,7 @@
         p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
         p.controlPoints[1][0] = new Vec2(mousePos2.x, mousePos2.y);
         p.controlPoints[2][0] = new Vec2(mousePos2.x, mousePos2.y);
-        currentPart2.paths.push(p);
+        currentPart2.addPath(p);
         currentPath = p;
         console.log(currentPath);
       },
@@ -1242,14 +1331,14 @@
   var pointerPos = new Vec2(0, 0);
   var mousePos2 = new Vec2(0, 0);
   var mouseDown = false;
-  c.addEventListener("wheel", (self, e) => {
+  c.addEventListener("wheel", (self, ev) => {
+    var e = ev;
     e.preventDefault();
     var befPos = viewportToWorld2(pointerPos);
     zoomFactor -= e.wheelDelta / 480;
     var aftPos = viewportToWorld2(pointerPos);
     posInWorld.x += befPos.x - aftPos.x;
     posInWorld.y += befPos.y - aftPos.y;
-    console.log(e.wheelDelta / 120);
   });
   ctx.strokeStyle = "red";
   var defaultVec2 = new Vec2(0, 0);
@@ -1338,6 +1427,8 @@
     mousePos2.x = newMousePos.x;
     mousePos2.y = newMousePos.y;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = theme.gridTheme.bgColor;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval);
     ctx.strokeStyle = "grey";
     ctx.lineWidth = 2;
@@ -1375,6 +1466,8 @@
       if (i.visible) {
         i.draw(ctx);
         i.previewCtx.clearRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
+        i.previewCtx.fillStyle = theme.gridTheme.bgColor;
+        i.previewCtx.fillRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
         i.draw(i.previewCtx);
       }
     }
@@ -1468,11 +1561,7 @@
     `],
     [".part-list-container > button", `
         width: 100%;
-        border: 1px solid black;
-        border-radius: 3px;
-        margin: 0.1em 0;
         box-sizing: border-box;
-        background-color: white;
 
     `],
     [".part-list-container", `
@@ -1520,6 +1609,11 @@
       }
     }).addStyle("display: flex; padding: 0; border: none; background-color: transparent;"), ...items).addStyle("display: flex; width: 100%; flex-direction: column; gap: 0.3em;");
   }
+  var generalStyles = dynamicStyleGroup(() => [
+    ["*", `
+        color: ${theme.textTheme.textColor};
+    `]
+  ], "general");
   var app = new container(new container("x:", xCoordReadout, " y:", yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"), c.addStyle("width: 100%; height: 100%; cursor: none;"), new container(partConfigs, physicsConfig).addStyle(`
         position: absolute;
         right: 0;
@@ -1527,7 +1621,22 @@
         margin: 0.3em;
         width: 13em;
         overflow: hidden;
-    `), new container(new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+    `), new container(menuList("Preferences", [
+    menuList("style", [
+      menuList("grid", [
+        new button("width").addToStyleGroup(buttonStyles)
+      ])
+    ]),
+    menuList("themes", [
+      new button("dark").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+        setTheme(darkTheme);
+      }),
+      new button("light").addToStyleGroup(buttonStyles).addEventListener("click", () => {
+        setTheme(lightTheme);
+      }),
+      new button("+").addToStyleGroup(buttonStyles)
+    ])
+  ]), new container().addToStyleGroup(hrStyles), new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", () => {
     if (confirm("Are you sure you want to clear this part's paths?")) {
       currentPart2.paths = [];
     }
@@ -1541,7 +1650,7 @@
     new container("Minor:", new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
       gridMinorInterval = parseInt(self.htmlNode.value);
     })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px")
-  ]), menuList("Parts", [new container(partList, new button("+").addEventListener("click", (self) => {
+  ]), menuList("Parts", [new container(partList, new button("+").addToStyleGroup(buttonStyles).addEventListener("click", (self) => {
     var newPart = new Part();
     parts.push(newPart);
     partList.addChildren(newPart.listNode.addEventListener("click", () => {
@@ -1552,7 +1661,7 @@
     partConfigs.lightRerender();
     collisionGroups[0].addPart(newPart);
     selectPart3(newPart);
-  })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset));
+  })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset)).addToStyleGroup(generalStyles);
   renderApp(app, document.getElementById("app"));
   selectPart3(currentPart2);
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);

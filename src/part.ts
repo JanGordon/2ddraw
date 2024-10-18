@@ -5,15 +5,18 @@ import { kleinTextNode, styleGroup } from "kleinui"
 import { collisionGroups } from "./physics"
 import { buttonStyles } from "./styles"
 import { rigidbody } from "./rigidbody"
+import { theme } from "./preferences"
 
 
 export interface Path {
+    name: string
     controlPoints: Vec2[][] 
     draw(ctx: CanvasRenderingContext2D, p: Part): void
 }
 
 
 export class ellipticalPath implements Path {
+    name = "ellipse"
     controlPoints: Vec2[][] = [[], [], []]
     get center() {
         return this.controlPoints[0][0]
@@ -38,6 +41,7 @@ export class ellipticalPath implements Path {
 }
 
 export class freePath implements Path {
+    name = "free"
     controlPoints: Vec2[][] = [[]]
     draw(ctx: CanvasRenderingContext2D, p: Part) {
         ctx.beginPath()
@@ -53,6 +57,7 @@ export class freePath implements Path {
 }
 
 export class linePath implements Path {
+    name = "line"
     controlPoints: Vec2[][] = [[],[]]
     get start() {
         return this.controlPoints[0][0]
@@ -72,6 +77,7 @@ export class linePath implements Path {
 }
 
 export class ngonPath implements Path {
+    name = "ngon"
     controlPoints: Vec2[][] = [[]]
     draw(ctx: CanvasRenderingContext2D, p: Part) {
         ctx.beginPath()
@@ -142,6 +148,16 @@ export class Part {
 
     previewCtx: CanvasRenderingContext2D
     collisionGroupsNode: container
+    pathListNode: container = new container()
+
+    addPath(p:Path) {
+        this.paths.push(p)
+        this.pathListNode.removeAllChildren()
+        this.pathListNode.addChildren(...this.paths.map((p)=>{
+            return new button(p.name)
+        }))
+        this.pathListNode.parent!.lightRerender()
+    }
 
     worldToPart(pos: Vec2) {
         return new Vec2(
@@ -177,7 +193,7 @@ export class Part {
 
         this.listNode = new container(
             this.name,
-            previewCanvas.addStyle("position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;"),
+            previewCanvas.addStyle(`position: absolute; z-index: 0; top: 0; left: 0; width: 100%; height: 100%;`),
 
             new button("👁")
                 .addToStyleGroup(visiblityStyles)
@@ -202,14 +218,18 @@ export class Part {
         `)
 
         this.configNode = new container(
-            new header1(this.name).addStyle("text-align: right; margin: 0; font-size: 1em;"),
-            new header2("Simulation"),
-            new textInput().setAttribute("type","checkbox").setAttribute("checked", "").addEventListener("change", (self)=>{
-                this.rigidbody.hasGravity = self.htmlNode.checked
-                console.log(this.rigidbody.hasGravity)
-            }),
-            "Has Gravity",
-            this.collisionGroupsNode
+            new header1(this.name).addStyle("text-align: right; margin: 0; margin-right: 4px; font-size: 1em;"),
+            new header2("Paths"),
+            this.pathListNode,
+            new container(
+                "Has Gravity",
+                new textInput().setAttribute("type","checkbox").setAttribute("checked", "").addEventListener("change", (self)=>{
+                    this.rigidbody.hasGravity = self.htmlNode.checked
+                    console.log(this.rigidbody.hasGravity)
+                }),
+                
+            ),
+            
             
         ).addToStyleGroup(configStyles)
         

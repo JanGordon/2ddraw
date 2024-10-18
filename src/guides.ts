@@ -70,7 +70,7 @@ export const toolGuides = {
         handleStartDraw: ()=>{
             var p = new freePath()
             p.controlPoints = [[viewportToWorld(mousePos)]]
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
             currentPath = p
             console.log(currentPath)
         },
@@ -101,7 +101,7 @@ export const toolGuides = {
             var p = new linePath()
             p.controlPoints[0][0] = closestPointOnLine(controlPoints[0][0], controlPoints[1][0])
             p.controlPoints[1][0] = new Vec2(p.start.x ,p.start.y)
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
             currentPath = p
             console.log(currentPath)
         },
@@ -137,7 +137,7 @@ export const toolGuides = {
             p.controlPoints[1][0] = new Vec2(mousePos.x, mousePos.y)
             p.controlPoints[1][0] = new Vec2(mousePos.x, mousePos.y)
             p.controlPoints[2][0] = new Vec2(mousePos.x, mousePos.y)
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
             currentPath = p
             console.log(currentPath)
         },

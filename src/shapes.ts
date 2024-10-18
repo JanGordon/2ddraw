@@ -32,7 +32,7 @@ export const shapeGenerators = {
             p.controlPoints[0][0] = currentPart.viewportToPart(mousePos)
 
             p.controlPoints[1][0] = new Vec2(p.start.x ,p.start.y)
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
         },
         handleDraw: (controlPoints)=>{
             var c = currentPart.currentPath as linePath
@@ -53,7 +53,7 @@ export const shapeGenerators = {
             p.controlPoints[1][0] = p.controlPoints[0][1]
             p.controlPoints[2][0] = p.controlPoints[0][1]
 
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
         },
         handleDraw: (controlPoints)=>{
             var p = currentPart.currentPath as ellipticalPath
@@ -75,7 +75,7 @@ export const shapeGenerators = {
                 p.controlPoints[0][i+1].y = Math.cos(a * (Math.PI/180)) * radius + p.controlPoints[0][0].y
             }
             
-            currentPart.paths.push(p)
+            currentPart.addPath(p)
         },
         handleDraw: (controlPoints)=>{
             var c = currentPart.currentPath as ngonPath

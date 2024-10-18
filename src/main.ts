@@ -9,6 +9,10 @@ import { modeButtons, selectedMode } from "./modes"
 import { selectedShape, shapeButtons, shapeGenerators } from "./shapes"
 import { buttonStyles, inputStyles } from "./styles"
 import { collisionGroup, collisionGroups, physicsConfig } from "./physics"
+import { darkTheme, lightTheme, setTheme, theme } from "./preferences"
+import { dynamicStyleGroup } from "./theme"
+
+
 
 
 const controlSnapDistance = 10
@@ -48,10 +52,12 @@ export var pointerPos = new Vec2(0,0) // specifically position of pointer ignori
 export var mousePos = new Vec2(0,0) // mouse position including snapping
 export var mouseDown = false
 
-c.addEventListener("wheel", (self, e)=>{
+c.addEventListener("wheel", (self, ev)=>{
+    var e = ev as WheelEvent
     e.preventDefault()
     // world posiiton of mouse before zoom
     var befPos = viewportToWorld(pointerPos)
+    //@ts-ignore
     zoomFactor -= e.wheelDelta/480
     // world position of mouse after zoom
     var aftPos = viewportToWorld(pointerPos)
@@ -59,7 +65,6 @@ c.addEventListener("wheel", (self, e)=>{
     // move world by that differnce
     posInWorld.x += befPos.x - aftPos.x
     posInWorld.y += befPos.y - aftPos.y
-    console.log(e.wheelDelta/120)
 })
 
 
@@ -182,6 +187,8 @@ function render() {
     mousePos.x = newMousePos.x
     mousePos.y = newMousePos.y
     ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height)
+    ctx.fillStyle = theme.gridTheme.bgColor
+    ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height)
 
     drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval)
     ctx.strokeStyle = "grey"
@@ -234,6 +241,8 @@ function render() {
         if (i.visible) {
             i.draw(ctx)
             i.previewCtx.clearRect(0,0, i.previewCtx.canvas.width, i.previewCtx.canvas.height)
+            i.previewCtx.fillStyle = theme.gridTheme.bgColor
+            i.previewCtx.fillRect(0,0,i.previewCtx.canvas.width,i.previewCtx.canvas.height)
             i.draw(i.previewCtx)
         }
     }
@@ -356,11 +365,7 @@ var partListStyles = new styleGroup([
     `],
     [".part-list-container > button", `
         width: 100%;
-        border: 1px solid black;
-        border-radius: 3px;
-        margin: 0.1em 0;
         box-sizing: border-box;
-        background-color: white;
 
     `],
     [".part-list-container", `
@@ -399,6 +404,8 @@ export function selectPart(part: Part) {
     }
 }
 
+
+
 export function menuList(title: string, items: kleinElementNode[]) {
     const dropIcon = new kleinTextNode("˅")
     return new container(
@@ -429,6 +436,12 @@ export function menuList(title: string, items: kleinElementNode[]) {
 }
 
 
+let generalStyles = dynamicStyleGroup(()=>[
+    ["*", `
+        color: ${theme.textTheme.textColor};
+    `]
+], "general")
+
 const app = new container(
     new container("x:", xCoordReadout," y:" ,yCoordReadout).addStyle("position: absolute; bottom: 0; right: 0;"),
     c.addStyle("width: 100%; height: 100%; cursor: none;"),
@@ -445,6 +458,24 @@ const app = new container(
     `),
     
     new container(
+            menuList("Preferences", [
+                menuList("style", [
+                    menuList("grid", [
+                        new button("width").addToStyleGroup(buttonStyles),
+
+                    ])
+                ]),
+                menuList("themes", [
+                    new button("dark").addToStyleGroup(buttonStyles).addEventListener("click", ()=>{
+                        setTheme(darkTheme)
+                    }),
+                    new button("light").addToStyleGroup(buttonStyles).addEventListener("click", ()=>{
+                        setTheme(lightTheme)
+                    }),
+                    new button("+").addToStyleGroup(buttonStyles),
+                ])
+            ]),
+            new container().addToStyleGroup(hrStyles),
             new button("clear").addToStyleGroup(buttonStyles).addEventListener("click", ()=> {
                 if (confirm("Are you sure you want to clear this part's paths?")) {
                     currentPart.paths = []
@@ -481,7 +512,7 @@ const app = new container(
             menuList("Parts", 
                 [new container(
                     partList,
-                    new button("+").addEventListener("click", (self)=>{
+                    new button("+").addToStyleGroup(buttonStyles).addEventListener("click", (self)=>{
                         var newPart = new Part()
                         parts.push(newPart)
                         partList.addChildren(
@@ -507,7 +538,7 @@ const app = new container(
     )
     
    
-)
+).addToStyleGroup(generalStyles)
 
 renderApp(app, document.getElementById("app")!)
 selectPart(currentPart)
