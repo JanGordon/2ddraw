@@ -3,8 +3,8 @@ import { registerKeybind } from "./keys"
 import { buttonStyles } from "./styles"
 
 export const modeButtons = {
-    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
-    draw: new button("draw").setAttribute("title", "draw (d)"),
+    select: new button("select").setAttribute("title", "select (s)"),
+    draw: new button("draw").setAttribute("title", "draw (d)").addClass("selected"),
     move: new button("move").setAttribute("title", "move (f)")
 }
 
@@ -18,7 +18,7 @@ registerKeybind("f", ()=>{
     selectMode("move")
 })
 
-export var selectedMode = "select"
+export var selectedMode = "draw"
 
 
 for (let i of Object.entries(modeButtons)) {

@@ -6,14 +6,14 @@ import { Path, freePath, linePath, ellipticalPath } from "./part";
 import { near2d, Vec2 } from "./vec";
 import { setSelectedShape, shapeButtons } from "./shapes";
 
-export var selectedTool: string 
+export var selectedTool: string = "free" 
 
 const freehandSegmentLength = 3
 var currentPath: Path;
 
 
 export const toolButtons = {
-    free: new button("free").setAttribute("title", "free (g)"),
+    free: new button("free").setAttribute("title", "free (g)").addClass("selected"),
     line: new button("line").setAttribute("title", "line (v)"),
     circle: new button("circle").setAttribute("title", "circle (c)")
 }

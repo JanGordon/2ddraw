@@ -505,9 +505,17 @@
     var sT = dynamicStyles.get(styleName);
     if (sT?.length == 2) {
       sT[0].styles = sT[1]();
-      document.head.querySelector("#" + sT[0].className).innerHTML = sT[0].getCss();
+      var ss = document.head.querySelector("#" + sT[0].className);
+      if (ss) {
+        ss.innerHTML = sT[0].getCss();
+      }
     } else {
       console.error("no style group named", styleName);
+    }
+  }
+  function updateAllDynamicStyles() {
+    for (let i of dynamicStyles.keys()) {
+      updateDynamicStyleGroup(i);
     }
   }
 
@@ -556,11 +564,9 @@
   };
   function setTheme(t) {
     theme = t;
-    updateDynamicStyleGroup("btn");
-    updateDynamicStyleGroup("inpt");
-    updateDynamicStyleGroup("general");
+    updateAllDynamicStyles();
   }
-  var theme = lightTheme;
+  var theme = darkTheme;
   console.log(theme);
 
   // src/grid.ts
@@ -601,6 +607,53 @@
     }
   }
 
+  // src/styles.ts
+  var buttonStyles = dynamicStyleGroup(() => [
+    [".btn", `
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
+        padding: 0.3em 0.4em;
+        color: ${theme.buttonTheme.textColor};
+        width: 100%;
+        font-weight: bolder;
+    `],
+    [".btn.selected", `
+        background-color: ${theme.buttonTheme.selectedBgColor};    
+    `]
+  ], "btn");
+  var pathBtnStyles = dynamicStyleGroup(() => [
+    [".path-btn", `
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
+        padding: 0.3em 0.4em;
+        color: ${theme.buttonTheme.textColor};
+        width: min-content;
+        font-weight: bolder;
+    `],
+    [".path-btn.selected", `
+        background-color: ${theme.buttonTheme.selectedBgColor};    
+    `]
+  ], "path-btn");
+  var inputStyles = dynamicStyleGroup(() => [
+    [".inpt", `
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
+        padding: 0.3em 0.4em;
+        color: ${theme.buttonTheme.textColor};
+        width: calc(100% - 0.8em);
+        font-weight: bolder;
+    `],
+    [".inpt input", `
+        width: calc(100% - 0.8em);
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        background-color: ${theme.buttonTheme.bgColor};
+        color: ${theme.buttonTheme.textColor};
+    `]
+  ], "inpt");
+
   // src/rigidbody.ts
   var rigidbody = class {
     constructor(p) {
@@ -626,9 +679,19 @@
   };
 
   // src/part.ts
+  var previousStyle = {
+    colour: "black",
+    width: 10
+  };
+  function setPathStyle(ctx2, style) {
+    ctx2.strokeStyle = style.colour;
+    ctx2.lineWidth = style.width / zoomFactor;
+    previousStyle = style;
+  }
   var ellipticalPath = class {
     constructor() {
       this.name = "ellipse";
+      this.style = { ...previousStyle };
       this.controlPoints = [[], [], []];
     }
     get center() {
@@ -646,6 +709,7 @@
       return Math.atan((this.controlPoints[2][0].x - this.controlPoints[0][0].x) / (this.controlPoints[2][0].y + this.controlPoints[0][0].y)) * (180 / Math.PI);
     }
     draw(ctx2, p) {
+      setPathStyle(ctx2, this.style);
       ctx2.beginPath();
       var cViewport = p.partToViewport(this.center);
       ctx2.ellipse(cViewport.x, cViewport.y, this.radius, this.radius, 0, this.startAngle, this.endAngle);
@@ -655,14 +719,18 @@
   var freePath = class {
     constructor() {
       this.name = "free";
+      this.style = { ...previousStyle };
       this.controlPoints = [[]];
     }
     draw(ctx2, p) {
+      setPathStyle(ctx2, this.style);
+      ctx2.lineJoin = "round";
+      ctx2.lineCap = "round";
       ctx2.beginPath();
-      for (let s = 1; s < this.controlPoints.length; s++) {
-        var vStart = p.partToViewport(this.controlPoints[s - 1][0]);
+      var vStart = p.partToViewport(this.controlPoints[0][0]);
+      ctx2.moveTo(vStart.x, vStart.y);
+      for (let s = 0; s < this.controlPoints.length; s++) {
         var vEnd = p.partToViewport(this.controlPoints[s][0]);
-        ctx2.moveTo(vStart.x, vStart.y);
         ctx2.lineTo(vEnd.x, vEnd.y);
       }
       ctx2.stroke();
@@ -671,6 +739,7 @@
   var linePath = class {
     constructor() {
       this.name = "line";
+      this.style = { ...previousStyle };
       this.controlPoints = [[], []];
     }
     get start() {
@@ -680,6 +749,7 @@
       return this.controlPoints[1][0];
     }
     draw(ctx2, p) {
+      setPathStyle(ctx2, this.style);
       ctx2.beginPath();
       var vStart = p.partToViewport(this.start);
       var vEnd = p.partToViewport(this.end);
@@ -691,9 +761,11 @@
   var ngonPath = class {
     constructor() {
       this.name = "ngon";
+      this.style = { ...previousStyle };
       this.controlPoints = [[]];
     }
     draw(ctx2, p) {
+      setPathStyle(ctx2, this.style);
       ctx2.beginPath();
       for (let i = 2; i < this.controlPoints[0].length; i++) {
         var vStart = p.partToViewport(this.controlPoints[0][i - 1]);
@@ -739,6 +811,7 @@
       this.paths = [];
       this._name = "Part";
       this.pathListNode = new container();
+      this.pathConfigContainer = new container();
       this.recordingDraw = false;
       this.visible = true;
       this._name = name ? name : `Part ${parts.length + 1}`;
@@ -757,7 +830,7 @@
             display: flex;
             flex-direction: column;
         `);
-      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; margin-right: 4px; font-size: 1em;"), new header2("Paths"), this.pathListNode, new container("Has Gravity", new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("change", (self) => {
+      this.configNode = new container(new header1(this.name).addStyle("text-align: right; margin: 0; margin-right: 4px; font-size: 1em;"), new header2("Paths"), this.pathListNode, this.pathConfigContainer, new container("Has Gravity", new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("change", (self) => {
         this.rigidbody.hasGravity = self.htmlNode.checked;
         console.log(this.rigidbody.hasGravity);
       }))).addToStyleGroup(configStyles);
@@ -773,12 +846,36 @@
       this.listNode.children[0].content = s;
       this.listNode.children[0].rerender();
     }
+    pathConfig() {
+      if (this.selectedPath) {
+        return new container(new container("Colour: ", new textInput().setAttribute("type", "color").setValue(this.selectedPath.style.colour).addEventListener("change", (self) => {
+          this.selectedPath.style.colour = self.htmlNode.value;
+        })), new container("Width: ", new textInput().setAttribute("type", "number").setValue(this.selectedPath.style.width.toString()).addEventListener("change", (self) => {
+          this.selectedPath.style.width = parseFloat(self.htmlNode.value);
+        })));
+      } else {
+        return new container("select a path to alter style");
+      }
+    }
     addPath(p) {
       this.paths.push(p);
-      this.pathListNode.removeAllChildren();
-      this.pathListNode.addChildren(...this.paths.map((p2) => {
-        return new button(p2.name);
+      for (let i of this.pathListNode.children) {
+        i.removeClass("selected").applyLastChange();
+      }
+      this.selectedPath = p;
+      this.pathListNode.addChildren(new button(p.name).addToStyleGroup(pathBtnStyles).addClass("selected").addEventListener("click", (self) => {
+        for (let i of self.parent.children) {
+          i.removeClass("selected").applyLastChange();
+        }
+        self.addClass("selected").applyLastChange();
+        this.selectedPath = p;
+        this.pathConfigContainer.removeAllChildren();
+        this.pathConfigContainer.addChildren(this.pathConfig());
+        this.pathConfigContainer.lightRerender();
       }));
+      this.pathConfigContainer.removeAllChildren();
+      this.pathConfigContainer.addChildren(this.pathConfig());
+      this.pathConfigContainer.lightRerender();
       this.pathListNode.parent.lightRerender();
     }
     worldToPart(pos) {
@@ -823,43 +920,10 @@
     }
   }
 
-  // src/styles.ts
-  var buttonStyles = dynamicStyleGroup(() => [
-    [".btn", `
-        background-color: ${theme.buttonTheme.bgColor};
-        border: 1px solid ${theme.buttonTheme.borderColor};
-        border-radius: ${theme.buttonTheme.borderRadius}px; 
-        padding: 0.3em 0.4em;
-        color: ${theme.buttonTheme.textColor};
-        width: 100%;
-        font-weight: bolder;
-    `],
-    [".btn.selected", `
-        background-color: ${theme.buttonTheme.selectedBgColor};    
-    `]
-  ], "btn");
-  var inputStyles = dynamicStyleGroup(() => [
-    [".inpt", `
-        background-color: ${theme.buttonTheme.bgColor};
-        border: 1px solid ${theme.buttonTheme.borderColor};
-        border-radius: ${theme.buttonTheme.borderRadius}px; 
-        padding: 0.3em 0.4em;
-        color: ${theme.buttonTheme.textColor};
-        width: calc(100% - 0.8em);
-        font-weight: bolder;
-    `],
-    [".inpt input", `
-        width: calc(100% - 0.8em);
-        border: 1px solid ${theme.buttonTheme.borderColor};
-        background-color: ${theme.buttonTheme.bgColor};
-        color: ${theme.buttonTheme.textColor};
-    `]
-  ], "inpt");
-
   // src/shapes.ts
   var ngonSides = 3;
   var shapeButtons = {
-    line: new button("line").setAttribute("title", "line (w)").addClass("selected"),
+    line: new button("line").setAttribute("title", "line (w)"),
     circle: new button("circle").setAttribute("title", "circle (e)"),
     rectangle: new button("rectangle").setAttribute("title", "rectangle (r)"),
     ngon: new container("n-agon:", new textInput().setValue("3").setAttribute("type", "number").addEventListener("change", (self) => {
@@ -957,11 +1021,11 @@
   }
 
   // src/guides.ts
-  var selectedTool2;
+  var selectedTool2 = "free";
   var freehandSegmentLength = 3;
   var currentPath;
   var toolButtons = {
-    free: new button("free").setAttribute("title", "free (g)"),
+    free: new button("free").setAttribute("title", "free (g)").addClass("selected"),
     line: new button("line").setAttribute("title", "line (v)"),
     circle: new button("circle").setAttribute("title", "circle (c)")
   };
@@ -1083,8 +1147,8 @@
 
   // src/modes.ts
   var modeButtons = {
-    select: new button("select").setAttribute("title", "select (s)").addClass("selected"),
-    draw: new button("draw").setAttribute("title", "draw (d)"),
+    select: new button("select").setAttribute("title", "select (s)"),
+    draw: new button("draw").setAttribute("title", "draw (d)").addClass("selected"),
     move: new button("move").setAttribute("title", "move (f)")
   };
   registerKeybind("s", () => {
@@ -1096,7 +1160,7 @@
   registerKeybind("f", () => {
     selectMode("move");
   });
-  var selectedMode = "select";
+  var selectedMode = "draw";
   for (let i of Object.entries(modeButtons)) {
     i[1].addToStyleGroup(buttonStyles).addEventListener("click", () => {
       selectMode(i[0]);
@@ -1348,7 +1412,7 @@
       for (let i of c2) {
         ctx2.beginPath();
         var vCoords = worldToViewport(i);
-        ctx2.ellipse(vCoords.x, vCoords.y, 3, 3, 0, 0, 360);
+        ctx2.ellipse(vCoords.x, vCoords.y, 1, 1, 0, 0, 360);
         ctx2.stroke();
         if (mouseDown && selectedMode == "select") {
           if (near(mousePos2.x, vCoords.x, controlSnapDistance) && near(mousePos2.y, vCoords.y, controlSnapDistance)) {
@@ -1399,28 +1463,49 @@
     draggingItems = [];
   });
   var lastMousePos = new Vec2(0, 0);
+  var engageSnapping = true;
   var snapToIntersections = false;
   var snapDistance = 7;
   function checkSnapPoints() {
-    var worldPointerPos = viewportToWorld2(pointerPos);
-    if (snapToIntersections) {
-      var nearestSnapPoint = new Vec2(Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval, Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval);
-      if (near2d(pointerPos, nearestSnapPoint, snapDistance)) {
-        return nearestSnapPoint;
+    if (engageSnapping) {
+      var worldPointerPos = viewportToWorld2(pointerPos);
+      if (snapToIntersections) {
+        var nearestSnapPoint = new Vec2(Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval, Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval);
+        if (near2d(pointerPos, nearestSnapPoint, snapDistance)) {
+          return nearestSnapPoint;
+        }
+      } else {
+        var closestXSnapPoint = Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval;
+        var closestYSnapPoint = Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval;
+        var newPos = new Vec2(pointerPos.x, pointerPos.y);
+        if (near(pointerPos.x, closestXSnapPoint, snapDistance)) {
+          newPos.x = closestXSnapPoint;
+        }
+        if (near(pointerPos.y, closestYSnapPoint, snapDistance)) {
+          newPos.y = closestYSnapPoint;
+        }
+        return newPos;
       }
-    } else {
-      var closestXSnapPoint = Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval;
-      var closestYSnapPoint = Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval;
-      var newPos = new Vec2(pointerPos.x, pointerPos.y);
-      if (near(pointerPos.x, closestXSnapPoint, snapDistance)) {
-        newPos.x = closestXSnapPoint;
-      }
-      if (near(pointerPos.y, closestYSnapPoint, snapDistance)) {
-        newPos.y = closestYSnapPoint;
-      }
-      return newPos;
     }
     return pointerPos;
+  }
+  function invertColor(hex) {
+    if (hex.indexOf("#") === 0) {
+      hex = hex.slice(1);
+    }
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    if (hex.length !== 6) {
+      throw new Error("Invalid HEX color.");
+    }
+    var r = (255 - parseInt(hex.slice(0, 2), 16)).toString(16), g = (255 - parseInt(hex.slice(2, 4), 16)).toString(16), b = (255 - parseInt(hex.slice(4, 6), 16)).toString(16);
+    return "#" + padZero(r) + padZero(g) + padZero(b);
+  }
+  function padZero(str, len) {
+    len = len || 2;
+    var zeros = new Array(len).join("0");
+    return (zeros + str).slice(-len);
   }
   function render() {
     var newMousePos = checkSnapPoints();
@@ -1431,6 +1516,37 @@
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     drawGrid(ctx, posInWorld, gridMinorInterval, gridMajorInterval);
     ctx.strokeStyle = "grey";
+    var worldMousePos = viewportToWorld2(mousePos2);
+    xCoordReadout.content = `${worldMousePos.x}`;
+    xCoordReadout.rerender();
+    yCoordReadout.content = `${worldMousePos.y}`;
+    yCoordReadout.rerender();
+    ctx.lineWidth = 1;
+    for (let i of parts) {
+      if (i.visible) {
+        i.draw(ctx);
+        i.previewCtx.clearRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
+        i.previewCtx.fillStyle = theme.gridTheme.bgColor;
+        i.previewCtx.fillRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
+        i.draw(i.previewCtx);
+      }
+    }
+    if (selectedTool2) {
+      var tG = toolGuides[selectedTool2];
+      tG.draw(ctx, tG.controlPoints);
+      if (selectedMode == "select") {
+        drawControlPoints(ctx, tG.controlPoints);
+      }
+    }
+    if (selectedMode == "select") {
+      for (let i of currentPart2.paths) {
+        ctx.strokeStyle = i.style.colour;
+        ctx.strokeStyle = invertColor(ctx.strokeStyle);
+        ctx.fillStyle = "";
+        ctx.lineWidth = 2;
+        drawControlPoints(ctx, i.controlPoints);
+      }
+    }
     ctx.lineWidth = 2;
     ctx.strokeStyle = "red";
     ctx.beginPath();
@@ -1444,33 +1560,6 @@
     ctx.ellipse(pointerPos.x, pointerPos.y, 2, 2, 0, 0, 360);
     ctx.fill();
     ctx.stroke();
-    var worldMousePos = viewportToWorld2(mousePos2);
-    xCoordReadout.content = `${worldMousePos.x}`;
-    xCoordReadout.rerender();
-    yCoordReadout.content = `${worldMousePos.y}`;
-    yCoordReadout.rerender();
-    ctx.lineWidth = 1;
-    if (selectedTool2) {
-      var tG = toolGuides[selectedTool2];
-      tG.draw(ctx, tG.controlPoints);
-      if (selectedMode == "select") {
-        drawControlPoints(ctx, tG.controlPoints);
-      }
-    }
-    if (selectedMode == "select") {
-      for (let i of currentPart2.paths) {
-        drawControlPoints(ctx, i.controlPoints);
-      }
-    }
-    for (let i of parts) {
-      if (i.visible) {
-        i.draw(ctx);
-        i.previewCtx.clearRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
-        i.previewCtx.fillStyle = theme.gridTheme.bgColor;
-        i.previewCtx.fillRect(0, 0, i.previewCtx.canvas.width, i.previewCtx.canvas.height);
-        i.draw(i.previewCtx);
-      }
-    }
     lastMousePos.x = mousePos2.x;
     lastMousePos.y = mousePos2.y;
     requestAnimationFrame(render);
@@ -1641,7 +1730,10 @@
       currentPart2.paths = [];
     }
   }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
-    new container("Snap:", new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
+    new container("Snap:", new textInput().setAttribute("checked", "").setAttribute("type", "checkbox").addEventListener("change", (self) => {
+      console.log(self.htmlNode.checked);
+      engageSnapping = self.htmlNode.checked;
+    }).addStyle("width: min-content; margin: none;"), new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
       snapDistance = parseInt(self.htmlNode.value);
     })).addToStyleGroup(inputStyles).setAttribute("title", "Snap distance - threshold needed to snap cursor to point"),
     new container("Major:", new textInput().setValue(gridMajorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {

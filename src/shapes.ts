@@ -9,7 +9,7 @@ import { selectedTool, setSelectedTool, toolButtons } from "./guides"
 var ngonSides = 3
 
 export const shapeButtons = {
-    line: new button("line").setAttribute("title", "line (w)").addClass("selected"),
+    line: new button("line").setAttribute("title", "line (w)"),
     circle: new button("circle").setAttribute("title", "circle (e)"),
     rectangle: new button("rectangle").setAttribute("title", "rectangle (r)"),
     ngon: new container(

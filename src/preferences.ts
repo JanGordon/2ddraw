@@ -1,5 +1,5 @@
 import { styleGroup } from "kleinui"
-import { updateDynamicStyleGroup } from "./theme"
+import { updateAllDynamicStyles, updateDynamicStyleGroup } from "./theme"
 
 export var lightTheme = {
     gridTheme: {
@@ -56,15 +56,13 @@ export var darkTheme = {
 
 export function setTheme(t: typeof lightTheme) {
     theme = t
-    updateDynamicStyleGroup("btn")
-    updateDynamicStyleGroup("inpt")
-    updateDynamicStyleGroup("general")
+    updateAllDynamicStyles()
 }
 
 
 
 
-export let theme = lightTheme
+export let theme = darkTheme
 console.log(theme)
 
 

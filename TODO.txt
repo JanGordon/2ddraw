@@ -1,1 +1,6 @@
-for some reason once youve moved once all snapping jsut stops
+- for some reason once youve moved once all snapping jsut stops
+- make snapping on paths
+- eraser
+- update pathlist on clear
+- fix selecting control points 
+- add system theme

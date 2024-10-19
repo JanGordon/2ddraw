@@ -17,6 +17,22 @@ export var buttonStyles = dynamicStyleGroup(()=>[
     `]
 ], "btn")
 
+
+export var pathBtnStyles = dynamicStyleGroup(()=>[
+    [".path-btn", `
+        background-color: ${theme.buttonTheme.bgColor};
+        border: 1px solid ${theme.buttonTheme.borderColor};
+        border-radius: ${theme.buttonTheme.borderRadius}px; 
+        padding: 0.3em 0.4em;
+        color: ${theme.buttonTheme.textColor};
+        width: min-content;
+        font-weight: bolder;
+    `],
+    [".path-btn.selected", `
+        background-color: ${theme.buttonTheme.selectedBgColor};    
+    `]
+], "path-btn")
+
 export var inputStyles = dynamicStyleGroup(()=>[
     [".inpt", `
         background-color: ${theme.buttonTheme.bgColor};

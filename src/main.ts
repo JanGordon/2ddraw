@@ -81,7 +81,7 @@ function drawControlPoints(ctx: CanvasRenderingContext2D, controlPoints: Vec2[][
         for (let i of c) {
             ctx.beginPath()
             var vCoords = worldToViewport(i)
-            ctx.ellipse(vCoords.x, vCoords.y, 3,3,0,0,360)
+            ctx.ellipse(vCoords.x, vCoords.y, 1,1,0,0,360)
             ctx.stroke()
             if (mouseDown && selectedMode == "select") {
                 if (near(mousePos.x, vCoords.x, controlSnapDistance ) && near(mousePos.y, vCoords.y, controlSnapDistance )) {
@@ -146,39 +146,67 @@ document.addEventListener("touchend", ()=>{
 
 var lastMousePos = new Vec2(0,0)
 
-var engageSnapping = false
+var engageSnapping = true
 var snapToIntersections = false
 var snapDistance = 7
 
 function checkSnapPoints(): Vec2 {
-    var worldPointerPos = viewportToWorld(pointerPos)
-    if (snapToIntersections) {
-        var nearestSnapPoint = new Vec2(
-            Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval,
-            Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
-        )
-        if (near2d(pointerPos, nearestSnapPoint, snapDistance)) {
-            return nearestSnapPoint
+    if (engageSnapping) {
+        var worldPointerPos = viewportToWorld(pointerPos)
+        if (snapToIntersections) {
+            var nearestSnapPoint = new Vec2(
+                Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval,
+                Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
+            )
+            if (near2d(pointerPos, nearestSnapPoint, snapDistance)) {
+                return nearestSnapPoint
+            }
+        } else {
+            var closestXSnapPoint = Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval
+            var closestYSnapPoint = Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
+            
+            var newPos = new Vec2(pointerPos.x, pointerPos.y)
+            
+            if (near(pointerPos.x, closestXSnapPoint, snapDistance)) {
+                newPos.x = closestXSnapPoint
+            }
+            if (near(pointerPos.y, closestYSnapPoint, snapDistance)) {
+                newPos.y = closestYSnapPoint
+            }
+            return newPos
+    
         }
-    } else {
-        var closestXSnapPoint = Math.round(worldPointerPos.x / gridMinorInterval) * gridMinorInterval
-        var closestYSnapPoint = Math.round(worldPointerPos.y / gridMinorInterval) * gridMinorInterval
-        
-        var newPos = new Vec2(pointerPos.x, pointerPos.y)
-        
-        if (near(pointerPos.x, closestXSnapPoint, snapDistance)) {
-            newPos.x = closestXSnapPoint
-        }
-        if (near(pointerPos.y, closestYSnapPoint, snapDistance)) {
-            newPos.y = closestYSnapPoint
-        }
-        return newPos
-
     }
+    
     
 
     
     return pointerPos
+}
+
+function invertColor(hex: string) {
+    if (hex.indexOf('#') === 0) {
+        hex = hex.slice(1);
+    }
+    // convert 3-digit hex to 6-digits.
+    if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    if (hex.length !== 6) {
+        throw new Error('Invalid HEX color.');
+    }
+    // invert color components
+    var r = (255 - parseInt(hex.slice(0, 2), 16)).toString(16),
+        g = (255 - parseInt(hex.slice(2, 4), 16)).toString(16),
+        b = (255 - parseInt(hex.slice(4, 6), 16)).toString(16);
+    // pad each with zeros and return
+    return '#' + padZero(r) + padZero(g) + padZero(b);
+}
+
+function padZero(str: string, len?: number) {
+    len = len || 2;
+    var zeros = new Array(len).join('0');
+    return (zeros + str).slice(-len);
 }
 
 function render() {
@@ -194,6 +222,47 @@ function render() {
     ctx.strokeStyle = "grey"
     
     
+
+    
+
+    var worldMousePos = viewportToWorld(mousePos)
+    xCoordReadout.content = `${worldMousePos.x}`
+    xCoordReadout.rerender()
+    yCoordReadout.content = `${worldMousePos.y}`
+    yCoordReadout.rerender()
+    ctx.lineWidth = 1
+
+    
+    for (let i of parts) {
+        if (i.visible) {
+            i.draw(ctx)
+            i.previewCtx.clearRect(0,0, i.previewCtx.canvas.width, i.previewCtx.canvas.height)
+            i.previewCtx.fillStyle = theme.gridTheme.bgColor
+            i.previewCtx.fillRect(0,0,i.previewCtx.canvas.width,i.previewCtx.canvas.height)
+            i.draw(i.previewCtx)
+        }
+    }
+
+
+
+    if (selectedTool) {
+        var tG = toolGuides[selectedTool]
+        tG.draw(ctx, tG.controlPoints)
+        if (selectedMode == "select") {
+            drawControlPoints(ctx, tG.controlPoints)
+        }
+    }
+
+    if (selectedMode == "select") {
+        for (let i of currentPart.paths) {
+            ctx.strokeStyle = i.style.colour
+            ctx.strokeStyle = invertColor(ctx.strokeStyle)
+            ctx.fillStyle = ""
+            ctx.lineWidth = 2
+            drawControlPoints(ctx, i.controlPoints)
+        }
+    }
+
 
     ctx.lineWidth = 2
     ctx.strokeStyle = "red"
@@ -217,35 +286,7 @@ function render() {
 
     ctx.stroke()
 
-    var worldMousePos = viewportToWorld(mousePos)
-    xCoordReadout.content = `${worldMousePos.x}`
-    xCoordReadout.rerender()
-    yCoordReadout.content = `${worldMousePos.y}`
-    yCoordReadout.rerender()
-    ctx.lineWidth = 1
 
-    if (selectedTool) {
-        var tG = toolGuides[selectedTool]
-        tG.draw(ctx, tG.controlPoints)
-        if (selectedMode == "select") {
-            drawControlPoints(ctx, tG.controlPoints)
-        }
-    }
-
-    if (selectedMode == "select") {
-        for (let i of currentPart.paths) {
-            drawControlPoints(ctx, i.controlPoints)
-        }
-    }
-    for (let i of parts) {
-        if (i.visible) {
-            i.draw(ctx)
-            i.previewCtx.clearRect(0,0, i.previewCtx.canvas.width, i.previewCtx.canvas.height)
-            i.previewCtx.fillStyle = theme.gridTheme.bgColor
-            i.previewCtx.fillRect(0,0,i.previewCtx.canvas.width,i.previewCtx.canvas.height)
-            i.draw(i.previewCtx)
-        }
-    }
     lastMousePos.x = mousePos.x
     lastMousePos.y = mousePos.y
     requestAnimationFrame(render)
@@ -492,6 +533,11 @@ const app = new container(
             menuList("Grid", [
                 new container(
                     "Snap:",
+                    new textInput().setAttribute("checked", "").setAttribute("type", "checkbox").addEventListener("change", (self)=>{
+                        console.log(self.htmlNode.checked)
+                        engageSnapping = self.htmlNode.checked
+                        
+                    }).addStyle("width: min-content; margin: none;"),
                     new textInput().setValue(snapDistance.toString()).setAttribute("type", "number").addEventListener("change", (self)=>{
                         snapDistance = parseInt(self.htmlNode.value)
                     }),

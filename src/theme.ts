@@ -12,8 +12,17 @@ export function updateDynamicStyleGroup(styleName: string) {
     var sT = dynamicStyles.get(styleName)
     if (sT?.length == 2) {
         sT[0].styles = sT[1]()
-        document.head.querySelector("#" + sT[0].className)!.innerHTML = sT[0].getCss()
+        var ss = document.head.querySelector("#" + sT[0].className)
+        if (ss) {
+            ss.innerHTML = sT[0].getCss()
+        }
     } else {
         console.error("no style group named", styleName)
+    }
+}
+
+export function updateAllDynamicStyles() {
+    for (let i of dynamicStyles.keys()) {
+        updateDynamicStyleGroup(i)
     }
 }

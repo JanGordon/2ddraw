@@ -1,15 +1,31 @@
 import { button, canvas, container, header1, header2, listItem, textInput, unorderedList } from "kleinui/elements"
-import { currentPart, mousePos, selectPart, viewportToWorld, worldToViewport } from "./main"
+import { currentPart, mousePos, selectPart, viewportToWorld, worldToViewport, zoomFactor } from "./main"
 import { Vec2 } from "./vec"
 import { kleinTextNode, styleGroup } from "kleinui"
 import { collisionGroups } from "./physics"
-import { buttonStyles } from "./styles"
+import { buttonStyles, pathBtnStyles } from "./styles"
 import { rigidbody } from "./rigidbody"
 import { theme } from "./preferences"
 
 
+var previousStyle = {
+    colour: "black",
+    width: 10,
+}
+
+type pathStyle = typeof previousStyle
+
+
+function setPathStyle(ctx: CanvasRenderingContext2D, style: pathStyle) {
+    ctx.strokeStyle = style.colour
+    ctx.lineWidth = style.width / zoomFactor
+    previousStyle = style
+}
+
+
 export interface Path {
     name: string
+    style: pathStyle
     controlPoints: Vec2[][] 
     draw(ctx: CanvasRenderingContext2D, p: Part): void
 }
@@ -17,6 +33,7 @@ export interface Path {
 
 export class ellipticalPath implements Path {
     name = "ellipse"
+    style = {...previousStyle}
     controlPoints: Vec2[][] = [[], [], []]
     get center() {
         return this.controlPoints[0][0]
@@ -33,6 +50,7 @@ export class ellipticalPath implements Path {
         return Math.atan((this.controlPoints[2][0].x-this.controlPoints[0][0].x)/(this.controlPoints[2][0].y+this.controlPoints[0][0].y)) * (180/Math.PI)
     }
     draw(ctx: CanvasRenderingContext2D, p: Part) {
+        setPathStyle(ctx, this.style)
         ctx.beginPath()
         var cViewport = p.partToViewport(this.center)
         ctx.ellipse(cViewport.x, cViewport.y, this.radius, this.radius, 0, this.startAngle, this.endAngle)
@@ -42,13 +60,18 @@ export class ellipticalPath implements Path {
 
 export class freePath implements Path {
     name = "free"
+    style = {...previousStyle}
     controlPoints: Vec2[][] = [[]]
     draw(ctx: CanvasRenderingContext2D, p: Part) {
+        setPathStyle(ctx, this.style)
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
         ctx.beginPath()
-        for (let s = 1; s < this.controlPoints.length; s++) {
-            var vStart = p.partToViewport(this.controlPoints[s-1][0])
+        var vStart = p.partToViewport(this.controlPoints[0][0])
+        ctx.moveTo(vStart.x, vStart.y)
+        for (let s = 0; s < this.controlPoints.length; s++) {
             var vEnd = p.partToViewport(this.controlPoints[s][0])
-            ctx.moveTo(vStart.x, vStart.y)
+            
             ctx.lineTo(vEnd.x, vEnd.y)
         }
         ctx.stroke()
@@ -58,6 +81,7 @@ export class freePath implements Path {
 
 export class linePath implements Path {
     name = "line"
+    style = {...previousStyle}
     controlPoints: Vec2[][] = [[],[]]
     get start() {
         return this.controlPoints[0][0]
@@ -66,6 +90,8 @@ export class linePath implements Path {
         return this.controlPoints[1][0]
     }
     draw(ctx: CanvasRenderingContext2D, p: Part) {
+        setPathStyle(ctx, this.style)
+
         ctx.beginPath()
         var vStart = p.partToViewport(this.start)
         var vEnd = p.partToViewport(this.end)
@@ -78,8 +104,11 @@ export class linePath implements Path {
 
 export class ngonPath implements Path {
     name = "ngon"
+    style = {...previousStyle}
     controlPoints: Vec2[][] = [[]]
     draw(ctx: CanvasRenderingContext2D, p: Part) {
+        setPathStyle(ctx, this.style)
+
         ctx.beginPath()
         for (let i = 2; i < this.controlPoints[0].length; i++) {
             var vStart = p.partToViewport(this.controlPoints[0][i-1])
@@ -150,12 +179,49 @@ export class Part {
     collisionGroupsNode: container
     pathListNode: container = new container()
 
+    pathConfigContainer = new container()
+
+    selectedPath: Path
+
+
+    pathConfig() {
+        if (this.selectedPath) {
+            return new container(
+                new container("Colour: ", new textInput().setAttribute("type", "color").setValue(this.selectedPath.style.colour).addEventListener("change", (self)=>{
+                    this.selectedPath.style.colour = self.htmlNode.value
+                })),
+                new container("Width: ", new textInput().setAttribute("type", "number").setValue(this.selectedPath.style.width.toString()).addEventListener("change", (self)=>{
+                    this.selectedPath.style.width = parseFloat(self.htmlNode.value)
+                }))
+            )
+        } else {
+            return new container("select a path to alter style")
+        }
+    }
+
     addPath(p:Path) {
         this.paths.push(p)
-        this.pathListNode.removeAllChildren()
-        this.pathListNode.addChildren(...this.paths.map((p)=>{
-            return new button(p.name)
-        }))
+        for (let i of this.pathListNode.children) {
+            i.removeClass("selected").applyLastChange()
+        }
+        this.selectedPath = p
+        
+        this.pathListNode.addChildren(
+            new button(p.name).addToStyleGroup(pathBtnStyles).addClass("selected").addEventListener("click", (self)=>{
+                for (let i of self.parent!.children) {
+                    i.removeClass("selected").applyLastChange()
+                }
+                self.addClass("selected").applyLastChange()
+                this.selectedPath = p
+                this.pathConfigContainer.removeAllChildren()
+                this.pathConfigContainer.addChildren(this.pathConfig())
+                this.pathConfigContainer.lightRerender()
+            })
+        )
+
+        this.pathConfigContainer.removeAllChildren()
+        this.pathConfigContainer.addChildren(this.pathConfig())
+        this.pathConfigContainer.lightRerender()
         this.pathListNode.parent!.lightRerender()
     }
 
@@ -221,6 +287,7 @@ export class Part {
             new header1(this.name).addStyle("text-align: right; margin: 0; margin-right: 4px; font-size: 1em;"),
             new header2("Paths"),
             this.pathListNode,
+            this.pathConfigContainer,
             new container(
                 "Has Gravity",
                 new textInput().setAttribute("type","checkbox").setAttribute("checked", "").addEventListener("change", (self)=>{
@@ -247,4 +314,5 @@ export class Part {
     listNode: container
     configNode: container
 }
+
 
