@@ -2,7 +2,7 @@ import { button, canvas, container, textInput } from "kleinui/elements"
 import { kleinElementNode, kleinTextNode, renderApp, styleGroup } from "kleinui"
 import { keys, registerKeybind } from "./keys"
 import { drawGrid } from "./grid"
-import { ellipticalPath, freePath, linePath, Part, parts, Path } from "./part"
+import { ellipticalPath, freePath, linePath, Part, parts, Path, setParts } from "./part"
 import { near, near2d, Vec2 } from "./vec"
 import { toolGuides, toolButtons, selectedTool } from "./guides"
 import { modeButtons, selectedMode } from "./modes"
@@ -11,6 +11,7 @@ import { buttonStyles, inputStyles } from "./styles"
 import { collisionGroup, collisionGroups, physicsConfig } from "./physics"
 import { darkTheme, lightTheme, setTheme, theme } from "./preferences"
 import { dynamicStyleGroup } from "./theme"
+import { openFile, openPrev, save, saveAs } from "./save"
 
 
 
@@ -414,13 +415,15 @@ var partListStyles = new styleGroup([
     `]
 ], "part-list-container")
 
-var partList = new container(
+
+
+export var partList = new container(
     ...parts.map((p)=>
         p.listNode.addEventListener("click", ()=>{selectPart(p)})
     )
 ).addClass("list")
 
-var partConfigs = menuList(
+export var partConfigs = menuList(
     "Part",
     parts.map((p)=>
         p.configNode
@@ -428,6 +431,51 @@ var partConfigs = menuList(
 ).addStyle("width: 100%;")
 
 
+export function createPart(): Part {
+    
+    var newPart = new Part()
+    parts.push(newPart)
+    partList.addChildren(
+        newPart.listNode.addEventListener("click", ()=>{selectPart(newPart)})
+    )
+    partList.lightRerender()
+    partConfigs.addChildren(
+        newPart.configNode
+    )
+    
+    partConfigs.lightRerender()
+    collisionGroups[0].addPart(newPart)
+
+    selectPart(newPart)
+    return newPart
+    
+}
+
+export function deletePart(p: Part) {
+    
+    setParts(parts.splice(parts.indexOf(p)))
+    partList.removeChild(p.listNode)
+    partList.lightRerender()
+    partConfigs.removeChild(
+        p.configNode
+    )
+    
+    partConfigs.lightRerender()
+    collisionGroups[0].removePart(p)
+
+    selectPart(parts[parts.length-1])
+    
+}
+
+export function deleteAllParts() {
+    setParts([])
+    partList.removeAllChildren()
+    partList.lightRerender()
+    partConfigs.removeAllChildren()
+    partConfigs.lightRerender()
+    collisionGroups[0].parts = []
+
+}
 
 
 export function selectPart(part: Part) {
@@ -499,6 +547,9 @@ const app = new container(
     `),
     
     new container(
+            new button("save").addToStyleGroup(buttonStyles).addEventListener("click", save), 
+            new button("save as").addToStyleGroup(buttonStyles).addEventListener("click", saveAs),
+            new button("open").addToStyleGroup(buttonStyles).addEventListener("click", openFile),
             menuList("Preferences", [
                 menuList("style", [
                     menuList("grid", [
@@ -558,22 +609,7 @@ const app = new container(
             menuList("Parts", 
                 [new container(
                     partList,
-                    new button("+").addToStyleGroup(buttonStyles).addEventListener("click", (self)=>{
-                        var newPart = new Part()
-                        parts.push(newPart)
-                        partList.addChildren(
-                            newPart.listNode.addEventListener("click", ()=>{selectPart(newPart)})
-                        )
-                        partList.lightRerender()
-                        partConfigs.addChildren(
-                            newPart.configNode
-                        )
-                        
-                        partConfigs.lightRerender()
-                        collisionGroups[0].addPart(newPart)
-
-                        selectPart(newPart)
-                    })
+                    new button("+").addToStyleGroup(buttonStyles).addEventListener("click", createPart)
                 ).addToStyleGroup(partListStyles)]
             )
             
@@ -595,3 +631,4 @@ c.setAttribute("height", `${c.htmlNode.clientHeight}`)
 c.lightRerender()
 resizeObserver.observe(c.htmlNode)
 
+openPrev()

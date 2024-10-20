@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "@types/wicg-file-system-access": "^2023.10.5",
+    "idb-keyval": "^6.2.1",
+    "idbhelp": "^1.0.0",
     "kleinui": "^0.0.2"
   }
-  
 }

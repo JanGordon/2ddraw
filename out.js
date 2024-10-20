@@ -665,18 +665,25 @@
       this.mass = 10;
       this.physicsPosOffset = new Vec2(0, 0);
       this.rotation = 0;
-      this.part = p;
+      this.privatePart = p;
     }
     calculateCG() {
-      for (let i of this.part.paths) {
+      for (let i of this.privatePart.paths) {
         i;
       }
     }
     generate() {
-      for (let i of this.part.paths) {
+      for (let i of this.privatePart.paths) {
       }
     }
   };
+
+  // src/rerender.ts
+  function rerender(p) {
+    if (p.htmlNode) {
+      p.lightRerender();
+    }
+  }
 
   // src/part.ts
   var previousStyle = {
@@ -780,6 +787,15 @@
       ctx2.stroke();
     }
   };
+  var pathMap = /* @__PURE__ */ new Map([
+    ["free", () => new freePath()],
+    ["elliptical", () => new ellipticalPath()],
+    ["line", () => new linePath()],
+    ["ngon", () => new ngonPath()]
+  ]);
+  function setParts(ps) {
+    parts = ps;
+  }
   var parts = [];
   var visiblityStyles = new styleGroup([
     [".vis.hidden:before", `
@@ -871,12 +887,12 @@
         this.selectedPath = p;
         this.pathConfigContainer.removeAllChildren();
         this.pathConfigContainer.addChildren(this.pathConfig());
-        this.pathConfigContainer.lightRerender();
+        rerender(this.pathConfigContainer);
       }));
       this.pathConfigContainer.removeAllChildren();
       this.pathConfigContainer.addChildren(this.pathConfig());
-      this.pathConfigContainer.lightRerender();
-      this.pathListNode.parent.lightRerender();
+      rerender(this.pathConfigContainer);
+      rerender(this.pathListNode.parent);
     }
     worldToPart(pos) {
       return new Vec2(pos.x - this.pos.x, pos.y - this.pos.y);
@@ -1317,6 +1333,7 @@
       pList.addChildren(new textInput().setAttribute("type", "checkbox").setAttribute("checked", "").addEventListener("input", (self) => {
         group.collide = self.htmlNode.checked;
       }));
+      console.log(parts);
       for (let i of parts) {
         var input = new textInput().setAttribute("type", "checkbox").setAttribute(group.parts.includes(i) ? "checked" : "placeholder", "").addEventListener("input", () => {
           if (input.htmlNode.checked) {
@@ -1351,7 +1368,7 @@
   }
   var collisionGroupsNodeContainer = new container(...collisionGroups.map((g) => getCollisionGroupNode(g))).addStyle("margin: 3px;");
   var simulating = false;
-  var physicsConfig = menuList("Physics", [
+  var physicsConfig = menuList2("Physics", [
     collisionGroupsNodeContainer,
     new button("+").addToStyleGroup(buttonStyles).addEventListener("click", () => {
       collisionGroups.push(new collisionGroup("Group " + (collisionGroups.length + 1)));
@@ -1376,6 +1393,138 @@
       }
     })
   ]);
+
+  // node_modules/idb-keyval/dist/index.js
+  function promisifyRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.oncomplete = request.onsuccess = () => resolve(request.result);
+      request.onabort = request.onerror = () => reject(request.error);
+    });
+  }
+  function createStore(dbName, storeName) {
+    const request = indexedDB.open(dbName);
+    request.onupgradeneeded = () => request.result.createObjectStore(storeName);
+    const dbp = promisifyRequest(request);
+    return (txMode, callback) => dbp.then((db) => callback(db.transaction(storeName, txMode).objectStore(storeName)));
+  }
+  var defaultGetStoreFunc;
+  function defaultGetStore() {
+    if (!defaultGetStoreFunc) {
+      defaultGetStoreFunc = createStore("keyval-store", "keyval");
+    }
+    return defaultGetStoreFunc;
+  }
+  function get(key, customStore = defaultGetStore()) {
+    return customStore("readonly", (store) => promisifyRequest(store.get(key)));
+  }
+  function set(key, value, customStore = defaultGetStore()) {
+    return customStore("readwrite", (store) => {
+      store.put(value, key);
+      return promisifyRequest(store.transaction);
+    });
+  }
+
+  // src/save.ts
+  function savePart(p) {
+    return {
+      name: p.name,
+      pos: p.pos,
+      startPos: p.startPos,
+      rigidbody: {
+        mass: p.rigidbody.mass,
+        hasGravity: p.rigidbody.hasGravity
+      },
+      paths: p.paths.map((path) => {
+        return {
+          controlPoints: path.controlPoints,
+          style: path.style,
+          type: path.name
+        };
+      })
+    };
+  }
+  function loadPart(p) {
+    var pr = createPart();
+    pr.name = p.name;
+    for (let v of p.paths) {
+      console.log(v.type);
+      var pConstructor = pathMap.get(v.type);
+      if (pConstructor) {
+        var path = pConstructor();
+        path.controlPoints = v.controlPoints;
+        path.style = v.style;
+        pr.addPath(path);
+      } else {
+        console.error("invalid path type: ", v.type);
+      }
+    }
+    pr.pos = p.pos;
+    pr.startPos = p.startPos;
+    pr.rigidbody = new rigidbody(pr);
+    pr.rigidbody.mass = p.rigidbody.mass;
+    pr.rigidbody.hasGravity = p.rigidbody.hasGravity;
+    return pr;
+  }
+  async function saveAs() {
+    const options = {
+      types: [
+        {
+          description: "Draw Files",
+          accept: {
+            "text/plain": [".drw"]
+          }
+        }
+      ]
+    };
+    console.log("here");
+    var fileHandle = await window.showSaveFilePicker(options);
+    const writable = await fileHandle.createWritable();
+    var toWrite = {
+      parts: parts.map(savePart)
+    };
+    console.log(toWrite);
+    await writable.write(JSON.stringify(toWrite));
+    await writable.close();
+    set("prev", fileHandle);
+  }
+  async function save() {
+    var fileHandle = await get("prev");
+    if (!fileHandle) {
+      saveAs();
+      return;
+    }
+    console.log("saving to", fileHandle.name);
+    const writable = await fileHandle.createWritable();
+    var toWrite = {
+      parts: parts.map(savePart)
+    };
+    console.log(toWrite);
+    await writable.write(JSON.stringify(toWrite));
+    await writable.close();
+  }
+  async function openFile() {
+    var [fileHandle] = await window.showOpenFilePicker();
+    const file = await fileHandle.getFile();
+    const saveObject = JSON.parse(await file.text());
+    console.log(saveObject);
+    deleteAllParts();
+    for (let p of saveObject.parts) {
+      parts.push(loadPart(p));
+    }
+  }
+  async function openPrev() {
+    var fileHandle = await get("prev");
+    if (!fileHandle) {
+      return;
+    }
+    const file = await fileHandle.getFile();
+    const saveObject = JSON.parse(await file.text());
+    console.log(saveObject);
+    deleteAllParts();
+    for (let p of saveObject.parts) {
+      parts.push(loadPart(p));
+    }
+  }
 
   // src/main.ts
   var controlSnapDistance = 10;
@@ -1660,7 +1809,37 @@
   var partList = new container(...parts.map((p) => p.listNode.addEventListener("click", () => {
     selectPart3(p);
   }))).addClass("list");
-  var partConfigs = menuList("Part", parts.map((p) => p.configNode)).addStyle("width: 100%;");
+  var partConfigs = menuList2("Part", parts.map((p) => p.configNode)).addStyle("width: 100%;");
+  function createPart() {
+    var newPart = new Part();
+    parts.push(newPart);
+    partList.addChildren(newPart.listNode.addEventListener("click", () => {
+      selectPart3(newPart);
+    }));
+    partList.lightRerender();
+    partConfigs.addChildren(newPart.configNode);
+    partConfigs.lightRerender();
+    collisionGroups[0].addPart(newPart);
+    selectPart3(newPart);
+    return newPart;
+  }
+  function deletePart2(p) {
+    setParts(parts.splice(parts.indexOf(p)));
+    partList.removeChild(p.listNode);
+    partList.lightRerender();
+    partConfigs.removeChild(p.configNode);
+    partConfigs.lightRerender();
+    collisionGroups[0].removePart(p);
+    selectPart3(parts[parts.length - 1]);
+  }
+  function deleteAllParts() {
+    setParts([]);
+    partList.removeAllChildren();
+    partList.lightRerender();
+    partConfigs.removeAllChildren();
+    partConfigs.lightRerender();
+    collisionGroups[0].parts = [];
+  }
   function selectPart3(part) {
     for (let i of parts) {
       i.listNode.removeClass("selected").applyLastChange();
@@ -1674,7 +1853,7 @@
       i.listener();
     }
   }
-  function menuList(title, items) {
+  function menuList2(title, items) {
     const dropIcon = new kleinTextNode("\u02C5");
     return new container(new button(title, new container(dropIcon).addStyle("margin-left: auto;")).addEventListener("click", (self) => {
       if (self.hasClass("hidden")) {
@@ -1710,13 +1889,13 @@
         margin: 0.3em;
         width: 13em;
         overflow: hidden;
-    `), new container(menuList("Preferences", [
-    menuList("style", [
-      menuList("grid", [
+    `), new container(new button("save").addToStyleGroup(buttonStyles).addEventListener("click", save), new button("save as").addToStyleGroup(buttonStyles).addEventListener("click", saveAs), new button("open").addToStyleGroup(buttonStyles).addEventListener("click", openFile), menuList2("Preferences", [
+    menuList2("style", [
+      menuList2("grid", [
         new button("width").addToStyleGroup(buttonStyles)
       ])
     ]),
-    menuList("themes", [
+    menuList2("themes", [
       new button("dark").addToStyleGroup(buttonStyles).addEventListener("click", () => {
         setTheme(darkTheme);
       }),
@@ -1729,7 +1908,7 @@
     if (confirm("Are you sure you want to clear this part's paths?")) {
       currentPart2.paths = [];
     }
-  }), menuList("Guides", Object.values(toolButtons)), menuList("Shapes", Object.values(shapeButtons)), menuList("Modes", Object.values(modeButtons)), menuList("Grid", [
+  }), menuList2("Guides", Object.values(toolButtons)), menuList2("Shapes", Object.values(shapeButtons)), menuList2("Modes", Object.values(modeButtons)), menuList2("Grid", [
     new container("Snap:", new textInput().setAttribute("checked", "").setAttribute("type", "checkbox").addEventListener("change", (self) => {
       console.log(self.htmlNode.checked);
       engageSnapping = self.htmlNode.checked;
@@ -1742,22 +1921,12 @@
     new container("Minor:", new textInput().setValue(gridMinorInterval.toString()).setAttribute("type", "number").addEventListener("change", (self) => {
       gridMinorInterval = parseInt(self.htmlNode.value);
     })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px")
-  ]), menuList("Parts", [new container(partList, new button("+").addToStyleGroup(buttonStyles).addEventListener("click", (self) => {
-    var newPart = new Part();
-    parts.push(newPart);
-    partList.addChildren(newPart.listNode.addEventListener("click", () => {
-      selectPart3(newPart);
-    }));
-    partList.lightRerender();
-    partConfigs.addChildren(newPart.configNode);
-    partConfigs.lightRerender();
-    collisionGroups[0].addPart(newPart);
-    selectPart3(newPart);
-  })).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset)).addToStyleGroup(generalStyles);
+  ]), menuList2("Parts", [new container(partList, new button("+").addToStyleGroup(buttonStyles).addEventListener("click", createPart)).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset)).addToStyleGroup(generalStyles);
   renderApp(app, document.getElementById("app"));
   selectPart3(currentPart2);
   c.setAttribute("width", `${c.htmlNode.clientWidth}`);
   c.setAttribute("height", `${c.htmlNode.clientHeight}`);
   c.lightRerender();
   resizeObserver.observe(c.htmlNode);
+  openPrev();
 })();

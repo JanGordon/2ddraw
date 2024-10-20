@@ -3,7 +3,7 @@ import { Vec2 } from "./vec";
 
 export class rigidbody {
     outofdate = false
-    part: Part
+    private privatePart: Part
     hasGravity = true
     force: Vec2 = new Vec2(0,0) // at cg
     acceleration: Vec2 = new Vec2(0,0)
@@ -12,15 +12,15 @@ export class rigidbody {
     physicsPosOffset = new Vec2(0,0)
     rotation = 0
     constructor(p: Part) {
-        this.part = p
+        this.privatePart = p
     }
     calculateCG() {
-        for (let i of this.part.paths) {
+        for (let i of this.privatePart.paths) {
             i
         }
     }
     generate() {
-        for (let i of this.part.paths) {
+        for (let i of this.privatePart.paths) {
             
         }
     }

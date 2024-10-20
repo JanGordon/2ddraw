@@ -91,7 +91,7 @@ function getCollisionGroupNode(group: collisionGroup) {
 
             })
         )
-
+        console.log(parts)
         for (let i of parts) {
             var input = new textInput().setAttribute("type", "checkbox").setAttribute(group.parts.includes(i) ? "checked" : "placeholder", "").addEventListener("input", ()=>{
                 if (input.htmlNode.checked) {

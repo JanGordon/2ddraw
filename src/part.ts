@@ -1,11 +1,12 @@
 import { button, canvas, container, header1, header2, listItem, textInput, unorderedList } from "kleinui/elements"
-import { currentPart, mousePos, selectPart, viewportToWorld, worldToViewport, zoomFactor } from "./main"
+import { currentPart, menuList, mousePos, selectPart, viewportToWorld, worldToViewport, zoomFactor } from "./main"
 import { Vec2 } from "./vec"
 import { kleinTextNode, styleGroup } from "kleinui"
 import { collisionGroups } from "./physics"
 import { buttonStyles, pathBtnStyles } from "./styles"
 import { rigidbody } from "./rigidbody"
 import { theme } from "./preferences"
+import { rerender } from "./rerender"
 
 
 var previousStyle = {
@@ -13,7 +14,7 @@ var previousStyle = {
     width: 10,
 }
 
-type pathStyle = typeof previousStyle
+export type pathStyle = typeof previousStyle
 
 
 function setPathStyle(ctx: CanvasRenderingContext2D, style: pathStyle) {
@@ -127,7 +128,18 @@ export class ngonPath implements Path {
 }
 
 
+export var pathMap = new Map<string, ()=>Path>([
+    ["free", ()=>new freePath()],
+    ["elliptical", ()=>new ellipticalPath()],
+    ["line", ()=>new linePath()],
+    ["ngon", ()=>new ngonPath()],
+])
 
+
+
+export function setParts(ps: Part[]) {
+    parts = ps
+}
 export var parts: Part[] = []
 
 const visiblityStyles = new styleGroup([
@@ -157,11 +169,14 @@ const configStyles = new styleGroup([
 // we need to draw and store coordinates for paths in relative to part
 
 
+
+
 export class Part {
     pos: Vec2 = viewportToWorld(new Vec2(0,0)) // position that part is drawn in (world space)
     startPos: Vec2 = viewportToWorld(new Vec2(0,0)) // starting position that part is drawn in (world space)
     rigidbody: rigidbody = new rigidbody(this)
     paths: Path[] = []
+
     get currentPath() {
         return this.paths[this.paths.length -1]
     }
@@ -215,14 +230,14 @@ export class Part {
                 this.selectedPath = p
                 this.pathConfigContainer.removeAllChildren()
                 this.pathConfigContainer.addChildren(this.pathConfig())
-                this.pathConfigContainer.lightRerender()
+                rerender(this.pathConfigContainer)
             })
         )
 
         this.pathConfigContainer.removeAllChildren()
         this.pathConfigContainer.addChildren(this.pathConfig())
-        this.pathConfigContainer.lightRerender()
-        this.pathListNode.parent!.lightRerender()
+        rerender(this.pathConfigContainer)
+        rerender(this.pathListNode.parent!)
     }
 
     worldToPart(pos: Vec2) {
