@@ -44,7 +44,7 @@ export function worldToViewport(pos: Vec2) {
 
 
 
-export const c = new canvas()
+export const c = new canvas().addStyle(`background-color: ${theme.gridTheme.bgColor};`)
 export const ctx = c.getContext("2d")!
 
 ctx.lineCap = "round"

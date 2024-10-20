@@ -519,6 +519,36 @@
     }
   }
 
+  // node_modules/idb-keyval/dist/index.js
+  function promisifyRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.oncomplete = request.onsuccess = () => resolve(request.result);
+      request.onabort = request.onerror = () => reject(request.error);
+    });
+  }
+  function createStore(dbName, storeName) {
+    const request = indexedDB.open(dbName);
+    request.onupgradeneeded = () => request.result.createObjectStore(storeName);
+    const dbp = promisifyRequest(request);
+    return (txMode, callback) => dbp.then((db) => callback(db.transaction(storeName, txMode).objectStore(storeName)));
+  }
+  var defaultGetStoreFunc;
+  function defaultGetStore() {
+    if (!defaultGetStoreFunc) {
+      defaultGetStoreFunc = createStore("keyval-store", "keyval");
+    }
+    return defaultGetStoreFunc;
+  }
+  function get(key, customStore = defaultGetStore()) {
+    return customStore("readonly", (store) => promisifyRequest(store.get(key)));
+  }
+  function set(key, value, customStore = defaultGetStore()) {
+    return customStore("readwrite", (store) => {
+      store.put(value, key);
+      return promisifyRequest(store.transaction);
+    });
+  }
+
   // src/preferences.ts
   var lightTheme = {
     gridTheme: {
@@ -564,9 +594,15 @@
   };
   function setTheme(t) {
     theme = t;
+    set("theme", t);
+    console.log("set", t);
     updateAllDynamicStyles();
   }
   var theme = darkTheme;
+  (async () => {
+    var t = await get("theme");
+    setTheme(t ? t : darkTheme);
+  })();
   console.log(theme);
 
   // src/grid.ts
@@ -1394,36 +1430,6 @@
     })
   ]);
 
-  // node_modules/idb-keyval/dist/index.js
-  function promisifyRequest(request) {
-    return new Promise((resolve, reject) => {
-      request.oncomplete = request.onsuccess = () => resolve(request.result);
-      request.onabort = request.onerror = () => reject(request.error);
-    });
-  }
-  function createStore(dbName, storeName) {
-    const request = indexedDB.open(dbName);
-    request.onupgradeneeded = () => request.result.createObjectStore(storeName);
-    const dbp = promisifyRequest(request);
-    return (txMode, callback) => dbp.then((db) => callback(db.transaction(storeName, txMode).objectStore(storeName)));
-  }
-  var defaultGetStoreFunc;
-  function defaultGetStore() {
-    if (!defaultGetStoreFunc) {
-      defaultGetStoreFunc = createStore("keyval-store", "keyval");
-    }
-    return defaultGetStoreFunc;
-  }
-  function get(key, customStore = defaultGetStore()) {
-    return customStore("readonly", (store) => promisifyRequest(store.get(key)));
-  }
-  function set(key, value, customStore = defaultGetStore()) {
-    return customStore("readwrite", (store) => {
-      store.put(value, key);
-      return promisifyRequest(store.transaction);
-    });
-  }
-
   // src/save.ts
   function savePart(p) {
     return {
@@ -1538,7 +1544,7 @@
   function worldToViewport(pos) {
     return new Vec2((pos.x - posInWorld.x) / zoomFactor, (pos.y - posInWorld.y) / zoomFactor);
   }
-  var c = new canvas();
+  var c = new canvas().addStyle(`background-color: ${theme.gridTheme.bgColor};`);
   var ctx = c.getContext("2d");
   ctx.lineCap = "round";
   var pointerPos = new Vec2(0, 0);

@@ -1,5 +1,6 @@
 import { styleGroup } from "kleinui"
 import { updateAllDynamicStyles, updateDynamicStyleGroup } from "./theme"
+import { get, set } from "idb-keyval"
 
 export var lightTheme = {
     gridTheme: {
@@ -56,14 +57,20 @@ export var darkTheme = {
 
 export function setTheme(t: typeof lightTheme) {
     theme = t
+    set("theme", t)
+    console.log("set", t)
     updateAllDynamicStyles()
 }
 
 
 
 
-export let theme = darkTheme
-console.log(theme)
+export let theme = darkTheme;
 
+(async ()=>{
+    var t = await get("theme")
+    setTheme(t ? t : darkTheme)
+})()
+console.log(theme)
 
 
