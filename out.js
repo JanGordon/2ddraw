@@ -1523,6 +1523,12 @@
     if (!fileHandle) {
       return;
     }
+    if (await fileHandle.queryPermission() == "denied") {
+      await fileHandle.requestPermission();
+      if (await fileHandle.queryPermission() == "denied") {
+        return;
+      }
+    }
     const file = await fileHandle.getFile();
     const saveObject = JSON.parse(await file.text());
     console.log(saveObject);
