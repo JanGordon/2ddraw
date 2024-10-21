@@ -128,10 +128,20 @@ export async function openFile() {
 }
 
 export async function openPrev() {
-    var fileHandle = await get("prev")
+    var fileHandle = await get("prev") as FileSystemFileHandle
     if (!fileHandle) {
         return
     }
+
+    
+    if (await fileHandle.queryPermission() == "denied") {
+        await fileHandle.requestPermission()
+        if (await fileHandle.queryPermission() == "denied") {
+            return
+        } 
+    } 
+    
+    
     const file = await fileHandle.getFile()
     const saveObject = JSON.parse(await file.text()) as ProjectSaveObject
     console.log(saveObject)
