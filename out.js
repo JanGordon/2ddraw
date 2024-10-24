@@ -599,10 +599,6 @@
     updateAllDynamicStyles();
   }
   var theme = darkTheme;
-  (async () => {
-    var t = await get("theme");
-    setTheme(t ? t : darkTheme);
-  })();
   console.log(theme);
 
   // src/grid.ts
@@ -1725,7 +1721,6 @@
     lastMousePos.y = mousePos2.y;
     requestAnimationFrame(render);
   }
-  requestAnimationFrame(render);
   c.addEventListener("mousemove", (self, e) => {
     var ev = e;
     pointerPos.x = ev.clientX;
@@ -1934,11 +1929,17 @@
       gridMinorInterval = parseInt(self.htmlNode.value);
     })).addToStyleGroup(inputStyles).setAttribute("title", "Minor grid interval - distance between minor grid lines, measured in px")
   ]), menuList2("Parts", [new container(partList, new button("+").addToStyleGroup(buttonStyles).addEventListener("click", createPart)).addToStyleGroup(partListStyles)])).addStyle("display: flex; width: 5em; height: calc(100% - 0.6em); padding: 0.3em; position: absolute; top: 0; flex-direction: column; align-items: center; gap: 0.2em;"), new container(xOffset, yOffset)).addToStyleGroup(generalStyles);
-  renderApp(app, document.getElementById("app"));
-  selectPart3(currentPart2);
-  c.setAttribute("width", `${c.htmlNode.clientWidth}`);
-  c.setAttribute("height", `${c.htmlNode.clientHeight}`);
-  c.lightRerender();
-  resizeObserver.observe(c.htmlNode);
-  openPrev();
+  (async () => {
+    var t = await get("theme");
+    setTheme(t ? t : darkTheme);
+    c.addStyle(`background-color: ${theme.gridTheme.bgColor};`);
+    renderApp(app, document.getElementById("app"));
+    selectPart3(currentPart2);
+    c.setAttribute("width", `${c.htmlNode.clientWidth}`);
+    c.setAttribute("height", `${c.htmlNode.clientHeight}`);
+    c.lightRerender();
+    resizeObserver.observe(c.htmlNode);
+    openPrev();
+    requestAnimationFrame(render);
+  })();
 })();

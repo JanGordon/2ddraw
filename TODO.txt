@@ -4,3 +4,4 @@
 - update pathlist on clear
 - fix selecting control points 
 - add system theme
+- add url paraemter to s elect filename

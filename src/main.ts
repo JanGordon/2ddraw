@@ -12,6 +12,7 @@ import { collisionGroup, collisionGroups, physicsConfig } from "./physics"
 import { darkTheme, lightTheme, setTheme, theme } from "./preferences"
 import { dynamicStyleGroup } from "./theme"
 import { openFile, openPrev, save, saveAs } from "./save"
+import { get } from "idb-keyval"
 
 
 
@@ -293,7 +294,7 @@ function render() {
     requestAnimationFrame(render)
 }
 
-requestAnimationFrame(render)
+
 
 
 
@@ -620,9 +621,15 @@ const app = new container(
     )
     
    
-).addToStyleGroup(generalStyles)
+).addToStyleGroup(generalStyles);
 
-renderApp(app, document.getElementById("app")!)
+
+(async ()=>{
+    var t = await get("theme")
+    setTheme(t ? t : darkTheme)
+
+    c.addStyle(`background-color: ${theme.gridTheme.bgColor};`)
+    renderApp(app, document.getElementById("app")!)
 selectPart(currentPart)
 
 
@@ -632,3 +639,6 @@ c.lightRerender()
 resizeObserver.observe(c.htmlNode)
 
 openPrev()
+requestAnimationFrame(render)
+})()
+

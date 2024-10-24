@@ -67,10 +67,7 @@ export function setTheme(t: typeof lightTheme) {
 
 export let theme = darkTheme;
 
-(async ()=>{
-    var t = await get("theme")
-    setTheme(t ? t : darkTheme)
-})()
+
 console.log(theme)
 
 
